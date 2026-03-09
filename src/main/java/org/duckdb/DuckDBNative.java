@@ -16,6 +16,9 @@ import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.sql.SQLException;
 import java.util.Properties;
+import org.duckdb.udf.ScalarUdf;
+import org.duckdb.udf.TableFunction;
+import org.duckdb.udf.UdfLogicalType;
 
 final class DuckDBNative {
 
@@ -233,6 +236,30 @@ final class DuckDBNative {
     static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
 
     static native void duckdb_jdbc_create_extension_type(ByteBuffer conn_ref) throws SQLException;
+
+    static native void duckdb_jdbc_register_scalar_udf(ByteBuffer conn_ref, byte[] name, ScalarUdf callback,
+                                                       UdfLogicalType[] argumentTypes, UdfLogicalType returnType,
+                                                       boolean nullSpecialHandling, boolean returnNullOnException,
+                                                       boolean deterministic, boolean varArgs) throws SQLException;
+
+    static native void duckdb_jdbc_register_table_function(ByteBuffer conn_ref, byte[] name, TableFunction callback,
+                                                           UdfLogicalType[] parameterTypes,
+                                                           boolean supportsProjectionPushdown, int maxThreads,
+                                                           boolean threadSafe) throws SQLException;
+
+    static native byte[] duckdb_jdbc_udf_get_varchar_bytes(ByteBuffer vector_ref, int row) throws SQLException;
+
+    static native void duckdb_jdbc_udf_set_varchar_bytes(ByteBuffer vector_ref, int row, byte[] value)
+        throws SQLException;
+
+    static native byte[] duckdb_jdbc_udf_get_blob_bytes(ByteBuffer vector_ref, int row) throws SQLException;
+
+    static native void duckdb_jdbc_udf_set_blob_bytes(ByteBuffer vector_ref, int row, byte[] value) throws SQLException;
+
+    static native BigDecimal duckdb_jdbc_udf_get_decimal(ByteBuffer vector_ref, int row) throws SQLException;
+
+    static native void duckdb_jdbc_udf_set_decimal(ByteBuffer vector_ref, int row, BigDecimal value)
+        throws SQLException;
 
     protected static native String duckdb_jdbc_get_profiling_information(ByteBuffer conn_ref,
                                                                          ProfilerPrintFormat format)

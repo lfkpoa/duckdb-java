@@ -20,3 +20,15 @@ This optionally takes an argument to only run a single test, for example:
 ```
 java -cp "build/release/duckdb_jdbc_tests.jar:build/release/duckdb_jdbc.jar"  org/duckdb/TestDuckDBJDBC test_valid_but_local_config_throws_exception
 ```
+
+### User-Defined Functions (Java)
+
+All Java UDF documentation and examples are available in [UDF.MD](UDF.MD).
+
+Scalar UDF registration includes ergonomic overloads for:
+- arity 1..4,
+- zero-argument functions,
+- varargs registration,
+- Java `Class<?>` type-mapped registration.
+
+These APIs keep the same vector callback runtime. For best performance, use chunk-oriented loops (`rowCount`) and prefer explicit logical types for precision-sensitive signatures.
