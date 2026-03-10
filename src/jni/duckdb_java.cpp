@@ -98,25 +98,6 @@ struct JavaTableFunctionInitData {
 	jobject state_ref;
 };
 
-static JNIEnv *get_callback_env(JavaVM *vm, bool &did_attach) {
-	did_attach = false;
-	JNIEnv *env = nullptr;
-	auto get_env_state = vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION);
-	if (get_env_state == JNI_EDETACHED) {
-		if (vm->AttachCurrentThread(reinterpret_cast<void **>(&env), nullptr) != JNI_OK) {
-			return nullptr;
-		}
-		did_attach = true;
-	}
-	return env;
-}
-
-static void cleanup_callback_env(JavaVM *vm, bool did_attach) {
-	if (did_attach) {
-		vm->DetachCurrentThread();
-	}
-}
-
 enum UdfVectorAccessMask : uint32_t {
 	ACCESS_GET_INT = 1 << 0,
 	ACCESS_GET_LONG = 1 << 1,
@@ -1239,12 +1220,11 @@ static void destroy_java_scalar_udf_callback_data(void *ptr) {
 		return;
 	}
 	auto data = reinterpret_cast<JavaScalarUdfCallbackData *>(ptr);
-	bool did_attach = false;
-	auto env = get_callback_env(data->vm, did_attach);
+	CallbackEnvGuard env_guard(data->vm);
+	auto env = env_guard.env();
 	if (env && data->callback_ref) {
-		env->DeleteGlobalRef(data->callback_ref);
+		delete_global_ref(env, data->callback_ref);
 	}
-	cleanup_callback_env(data->vm, did_attach);
 	delete data;
 }
 
@@ -1259,12 +1239,11 @@ static void destroy_java_table_function_callback_data(void *ptr) {
 		}
 	}
 	data->parameter_logical_types.clear();
-	bool did_attach = false;
-	auto env = get_callback_env(data->vm, did_attach);
+	CallbackEnvGuard env_guard(data->vm);
+	auto env = env_guard.env();
 	if (env && data->callback_ref) {
-		env->DeleteGlobalRef(data->callback_ref);
+		delete_global_ref(env, data->callback_ref);
 	}
-	cleanup_callback_env(data->vm, did_attach);
 	delete data;
 }
 
@@ -1273,12 +1252,11 @@ static void destroy_java_table_function_bind_data(void *ptr) {
 		return;
 	}
 	auto data = reinterpret_cast<JavaTableFunctionBindData *>(ptr);
-	bool did_attach = false;
-	auto env = get_callback_env(data->vm, did_attach);
+	CallbackEnvGuard env_guard(data->vm);
+	auto env = env_guard.env();
 	if (env && data->bind_result_ref) {
-		env->DeleteGlobalRef(data->bind_result_ref);
+		delete_global_ref(env, data->bind_result_ref);
 	}
-	cleanup_callback_env(data->vm, did_attach);
 	delete data;
 }
 
@@ -1287,12 +1265,11 @@ static void destroy_java_table_function_init_data(void *ptr) {
 		return;
 	}
 	auto data = reinterpret_cast<JavaTableFunctionInitData *>(ptr);
-	bool did_attach = false;
-	auto env = get_callback_env(data->vm, did_attach);
+	CallbackEnvGuard env_guard(data->vm);
+	auto env = env_guard.env();
 	if (env && data->state_ref) {
-		env->DeleteGlobalRef(data->state_ref);
+		delete_global_ref(env, data->state_ref);
 	}
-	cleanup_callback_env(data->vm, did_attach);
 	delete data;
 }
 
@@ -1303,8 +1280,8 @@ static void java_scalar_udf_callback(duckdb_function_info info, duckdb_data_chun
 		return;
 	}
 
-	bool did_attach = false;
-	auto env = get_callback_env(data->vm, did_attach);
+	CallbackEnvGuard env_guard(data->vm);
+	auto env = env_guard.env();
 	if (!env) {
 		duckdb_scalar_function_set_error(info, "Failed to acquire JNIEnv for Java scalar UDF callback");
 		return;
@@ -1315,7 +1292,6 @@ static void java_scalar_udf_callback(duckdb_function_info info, duckdb_data_chun
 	if ((!data->var_args && data->argument_types.size() != arg_count) ||
 	    (data->var_args && data->argument_types.size() != 1)) {
 		duckdb_scalar_function_set_error(info, "Scalar UDF argument mismatch");
-		cleanup_callback_env(data->vm, did_attach);
 		return;
 	}
 	duckdb_vector_ensure_validity_writable(output);
@@ -1334,24 +1310,14 @@ static void java_scalar_udf_callback(duckdb_function_info info, duckdb_data_chun
 	}
 	if (env->ExceptionCheck()) {
 		duckdb_scalar_function_set_error(info, "Failed to materialize scalar UDF input readers");
-		for (auto &rf : local_refs) {
-			if (rf) {
-				env->DeleteLocalRef(rf);
-			}
-		}
-		cleanup_callback_env(data->vm, did_attach);
+		delete_local_refs(env, local_refs);
 		return;
 	}
 	auto output_writer =
 	    create_scalar_udf_output_writer(env, output, data->return_type, row_count, validity_size, local_refs);
 	if (env->ExceptionCheck()) {
 		duckdb_scalar_function_set_error(info, "Failed to materialize scalar UDF output writer");
-		for (auto &rf : local_refs) {
-			if (rf) {
-				env->DeleteLocalRef(rf);
-			}
-		}
-		cleanup_callback_env(data->vm, did_attach);
+		delete_local_refs(env, local_refs);
 		return;
 	}
 
@@ -1366,7 +1332,7 @@ static void java_scalar_udf_callback(duckdb_function_info info, duckdb_data_chun
 				std::memset(output_validity_ptr, 0, static_cast<size_t>(validity_size));
 			}
 			if (exception) {
-				env->DeleteLocalRef(exception);
+				delete_local_ref(env, exception);
 			}
 		} else {
 			std::string error = "Exception in Java scalar UDF callback";
@@ -1374,21 +1340,16 @@ static void java_scalar_udf_callback(duckdb_function_info info, duckdb_data_chun
 				auto message = reinterpret_cast<jstring>(env->CallObjectMethod(exception, J_Throwable_getMessage));
 				if (message != nullptr) {
 					error = jstring_to_string(env, message);
-					env->DeleteLocalRef(message);
+					delete_local_ref(env, message);
 				}
-				env->DeleteLocalRef(exception);
+				delete_local_ref(env, exception);
 			}
 			duckdb_scalar_function_set_error(info, error.c_str());
 		}
 	}
 
-	for (auto &rf : local_refs) {
-		if (rf) {
-			env->DeleteLocalRef(rf);
-		}
-	}
+	delete_local_refs(env, local_refs);
 
-	cleanup_callback_env(data->vm, did_attach);
 }
 
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
@@ -1453,7 +1414,7 @@ void _duckdb_jdbc_register_scalar_udf(JNIEnv *env, jclass, jobject conn_ref_buf,
 
 		std::string logical_type_error;
 		auto arg_logical_type = create_table_logical_type_from_java(env, argument_type_obj, logical_type_error);
-		env->DeleteLocalRef(argument_type_obj);
+		delete_local_ref(env, argument_type_obj);
 		if (env->ExceptionCheck() || !arg_logical_type) {
 			destroy_arg_types();
 			if (logical_type_error.empty()) {
@@ -1550,8 +1511,8 @@ static void java_table_function_bind_callback(duckdb_bind_info info) {
 		duckdb_bind_set_error(info, "Missing callback state for Java table function");
 		return;
 	}
-	bool did_attach = false;
-	auto env = get_callback_env(callback_data->vm, did_attach);
+	CallbackEnvGuard env_guard(callback_data->vm);
+	auto env = env_guard.env();
 	if (!env) {
 		duckdb_bind_set_error(info, "Failed to acquire JNIEnv for Java table bind callback");
 		return;
@@ -1560,7 +1521,6 @@ static void java_table_function_bind_callback(duckdb_bind_info info) {
 	auto parameter_count = duckdb_bind_get_parameter_count(info);
 	if (callback_data->parameter_logical_types.size() != parameter_count) {
 		duckdb_bind_set_error(info, "Table function parameter count mismatch");
-		cleanup_callback_env(callback_data->vm, did_attach);
 		return;
 	}
 	auto parameters = env->NewObjectArray(static_cast<jsize>(parameter_count), J_Object, nullptr);
@@ -1577,23 +1537,13 @@ static void java_table_function_bind_callback(duckdb_bind_info info) {
 				parameter_error = "Failed to materialize table function bind parameter";
 			}
 			duckdb_bind_set_error(info, parameter_error.c_str());
-			for (auto &rf : bind_local_refs) {
-				if (rf) {
-					env->DeleteLocalRef(rf);
-				}
-			}
-			cleanup_callback_env(callback_data->vm, did_attach);
+			delete_local_refs(env, bind_local_refs);
 			return;
 		}
 		env->SetObjectArrayElement(parameters, static_cast<jsize>(i), param_obj);
 		if (env->ExceptionCheck()) {
 			duckdb_bind_set_error(info, "Failed to pass table function bind parameters to Java");
-			for (auto &rf : bind_local_refs) {
-				if (rf) {
-					env->DeleteLocalRef(rf);
-				}
-			}
-			cleanup_callback_env(callback_data->vm, did_attach);
+			delete_local_refs(env, bind_local_refs);
 			return;
 		}
 	}
@@ -1607,27 +1557,17 @@ static void java_table_function_bind_callback(duckdb_bind_info info) {
 			auto message = reinterpret_cast<jstring>(env->CallObjectMethod(exception, J_Throwable_getMessage));
 			if (message != nullptr) {
 				error = jstring_to_string(env, message);
-				env->DeleteLocalRef(message);
+				delete_local_ref(env, message);
 			}
-			env->DeleteLocalRef(exception);
+			delete_local_ref(env, exception);
 		}
 		duckdb_bind_set_error(info, error.c_str());
-		for (auto &rf : bind_local_refs) {
-			if (rf) {
-				env->DeleteLocalRef(rf);
-			}
-		}
-		cleanup_callback_env(callback_data->vm, did_attach);
+		delete_local_refs(env, bind_local_refs);
 		return;
 	}
 	if (bind_result == nullptr) {
 		duckdb_bind_set_error(info, "Java table function bind returned null");
-		for (auto &rf : bind_local_refs) {
-			if (rf) {
-				env->DeleteLocalRef(rf);
-			}
-		}
-		cleanup_callback_env(callback_data->vm, did_attach);
+		delete_local_refs(env, bind_local_refs);
 		return;
 	}
 
@@ -1639,79 +1579,45 @@ static void java_table_function_bind_callback(duckdb_bind_info info) {
 	    reinterpret_cast<jobjectArray>(env->CallObjectMethod(bind_result, J_TableBindResult_getColumnLogicalTypes));
 	if (env->ExceptionCheck() || column_names == nullptr || column_types == nullptr) {
 		duckdb_bind_set_error(info, "Invalid Java table bind result");
-		if (column_names) {
-			env->DeleteLocalRef(column_names);
-		}
-		if (column_types) {
-			env->DeleteLocalRef(column_types);
-		}
-		if (column_logical_types) {
-			env->DeleteLocalRef(column_logical_types);
-		}
-		env->DeleteLocalRef(bind_result);
-		for (auto &rf : bind_local_refs) {
-			if (rf) {
-				env->DeleteLocalRef(rf);
-			}
-		}
-		cleanup_callback_env(callback_data->vm, did_attach);
+		delete_local_ref(env, column_names);
+		delete_local_ref(env, column_types);
+		delete_local_ref(env, column_logical_types);
+		delete_local_ref(env, bind_result);
+		delete_local_refs(env, bind_local_refs);
 		return;
 	}
 	auto name_count = env->GetArrayLength(column_names);
 	auto type_count = env->GetArrayLength(column_types);
 	if (name_count != type_count) {
 		duckdb_bind_set_error(info, "Java table bind result has mismatched schema lengths");
-		env->DeleteLocalRef(column_names);
-		env->DeleteLocalRef(column_types);
-		if (column_logical_types) {
-			env->DeleteLocalRef(column_logical_types);
-		}
-		env->DeleteLocalRef(bind_result);
-		for (auto &rf : bind_local_refs) {
-			if (rf) {
-				env->DeleteLocalRef(rf);
-			}
-		}
-		cleanup_callback_env(callback_data->vm, did_attach);
+		delete_local_ref(env, column_names);
+		delete_local_ref(env, column_types);
+		delete_local_ref(env, column_logical_types);
+		delete_local_ref(env, bind_result);
+		delete_local_refs(env, bind_local_refs);
 		return;
 	}
 	if (column_logical_types != nullptr && env->GetArrayLength(column_logical_types) != name_count) {
 		duckdb_bind_set_error(info, "Java table bind result has mismatched logical schema lengths");
-		env->DeleteLocalRef(column_names);
-		env->DeleteLocalRef(column_types);
-		env->DeleteLocalRef(column_logical_types);
-		env->DeleteLocalRef(bind_result);
-		for (auto &rf : bind_local_refs) {
-			if (rf) {
-				env->DeleteLocalRef(rf);
-			}
-		}
-		cleanup_callback_env(callback_data->vm, did_attach);
+		delete_local_ref(env, column_names);
+		delete_local_ref(env, column_types);
+		delete_local_ref(env, column_logical_types);
+		delete_local_ref(env, bind_result);
+		delete_local_refs(env, bind_local_refs);
 		return;
 	}
 	for (jsize i = 0; i < name_count; i++) {
 		auto name_j = reinterpret_cast<jstring>(env->GetObjectArrayElement(column_names, i));
 		auto type_obj = env->GetObjectArrayElement(column_types, i);
 		if (!name_j || !type_obj) {
-			if (name_j) {
-				env->DeleteLocalRef(name_j);
-			}
-			if (type_obj) {
-				env->DeleteLocalRef(type_obj);
-			}
+			delete_local_ref(env, name_j);
+			delete_local_ref(env, type_obj);
 			duckdb_bind_set_error(info, "Unsupported column descriptor in Java table bind result");
-			env->DeleteLocalRef(column_names);
-			env->DeleteLocalRef(column_types);
-			if (column_logical_types) {
-				env->DeleteLocalRef(column_logical_types);
-			}
-			env->DeleteLocalRef(bind_result);
-			for (auto &rf : bind_local_refs) {
-				if (rf) {
-					env->DeleteLocalRef(rf);
-				}
-			}
-			cleanup_callback_env(callback_data->vm, did_attach);
+			delete_local_ref(env, column_names);
+			delete_local_ref(env, column_types);
+			delete_local_ref(env, column_logical_types);
+			delete_local_ref(env, bind_result);
+			delete_local_refs(env, bind_local_refs);
 			return;
 		}
 		auto name = jstring_to_string(env, name_j);
@@ -1720,51 +1626,39 @@ static void java_table_function_bind_callback(duckdb_bind_info info) {
 			auto logical_type_obj = env->GetObjectArrayElement(column_logical_types, i);
 			std::string logical_error;
 			logical_type = create_table_logical_type_from_java(env, logical_type_obj, logical_error);
-			if (logical_type_obj) {
-				env->DeleteLocalRef(logical_type_obj);
-			}
+			delete_local_ref(env, logical_type_obj);
 			if (env->ExceptionCheck() || !logical_type) {
 				if (logical_error.empty()) {
 					logical_error = "Unsupported logical type in Java table bind result";
 				}
 				duckdb_bind_set_error(info, logical_error.c_str());
-				env->DeleteLocalRef(name_j);
-				env->DeleteLocalRef(type_obj);
-				env->DeleteLocalRef(column_names);
-				env->DeleteLocalRef(column_types);
-				env->DeleteLocalRef(column_logical_types);
-				env->DeleteLocalRef(bind_result);
-				for (auto &rf : bind_local_refs) {
-					if (rf) {
-						env->DeleteLocalRef(rf);
-					}
-				}
-				cleanup_callback_env(callback_data->vm, did_attach);
+				delete_local_ref(env, name_j);
+				delete_local_ref(env, type_obj);
+				delete_local_ref(env, column_names);
+				delete_local_ref(env, column_types);
+				delete_local_ref(env, column_logical_types);
+				delete_local_ref(env, bind_result);
+				delete_local_refs(env, bind_local_refs);
 				return;
 			}
 		} else {
 			duckdb_type duck_type = DUCKDB_TYPE_INVALID;
 			if (!table_column_type_from_java(env, type_obj, duck_type)) {
 				duckdb_bind_set_error(info, "Unsupported column type in Java table bind result");
-				env->DeleteLocalRef(name_j);
-				env->DeleteLocalRef(type_obj);
-				env->DeleteLocalRef(column_names);
-				env->DeleteLocalRef(column_types);
-				env->DeleteLocalRef(bind_result);
-				for (auto &rf : bind_local_refs) {
-					if (rf) {
-						env->DeleteLocalRef(rf);
-					}
-				}
-				cleanup_callback_env(callback_data->vm, did_attach);
+				delete_local_ref(env, name_j);
+				delete_local_ref(env, type_obj);
+				delete_local_ref(env, column_names);
+				delete_local_ref(env, column_types);
+				delete_local_ref(env, bind_result);
+				delete_local_refs(env, bind_local_refs);
 				return;
 			}
 			logical_type = create_udf_logical_type(duck_type);
 		}
 		duckdb_bind_add_result_column(info, name.c_str(), logical_type);
 		duckdb_destroy_logical_type(&logical_type);
-		env->DeleteLocalRef(name_j);
-		env->DeleteLocalRef(type_obj);
+		delete_local_ref(env, name_j);
+		delete_local_ref(env, type_obj);
 	}
 
 	auto bind_data = new JavaTableFunctionBindData();
@@ -1773,34 +1667,20 @@ static void java_table_function_bind_callback(duckdb_bind_info info) {
 	if (!bind_data->bind_result_ref) {
 		delete bind_data;
 		duckdb_bind_set_error(info, "Failed to create global ref for Java table bind state");
-		env->DeleteLocalRef(column_names);
-		env->DeleteLocalRef(column_types);
-		if (column_logical_types) {
-			env->DeleteLocalRef(column_logical_types);
-		}
-		env->DeleteLocalRef(bind_result);
-		for (auto &rf : bind_local_refs) {
-			if (rf) {
-				env->DeleteLocalRef(rf);
-			}
-		}
-		cleanup_callback_env(callback_data->vm, did_attach);
+		delete_local_ref(env, column_names);
+		delete_local_ref(env, column_types);
+		delete_local_ref(env, column_logical_types);
+		delete_local_ref(env, bind_result);
+		delete_local_refs(env, bind_local_refs);
 		return;
 	}
 	duckdb_bind_set_bind_data(info, bind_data, destroy_java_table_function_bind_data);
 
-	env->DeleteLocalRef(column_names);
-	env->DeleteLocalRef(column_types);
-	if (column_logical_types) {
-		env->DeleteLocalRef(column_logical_types);
-	}
-	env->DeleteLocalRef(bind_result);
-	for (auto &rf : bind_local_refs) {
-		if (rf) {
-			env->DeleteLocalRef(rf);
-		}
-	}
-	cleanup_callback_env(callback_data->vm, did_attach);
+	delete_local_ref(env, column_names);
+	delete_local_ref(env, column_types);
+	delete_local_ref(env, column_logical_types);
+	delete_local_ref(env, bind_result);
+	delete_local_refs(env, bind_local_refs);
 }
 
 static void java_table_function_init_callback(duckdb_init_info info) {
@@ -1810,8 +1690,8 @@ static void java_table_function_init_callback(duckdb_init_info info) {
 		duckdb_init_set_error(info, "Missing callback/bind state for Java table function init");
 		return;
 	}
-	bool did_attach = false;
-	auto env = get_callback_env(callback_data->vm, did_attach);
+	CallbackEnvGuard env_guard(callback_data->vm);
+	auto env = env_guard.env();
 	if (!env) {
 		duckdb_init_set_error(info, "Failed to acquire JNIEnv for Java table init callback");
 		return;
@@ -1821,7 +1701,6 @@ static void java_table_function_init_callback(duckdb_init_info info) {
 	auto projected_column_indexes = env->NewIntArray(static_cast<jsize>(projected_column_count));
 	if (!projected_column_indexes) {
 		duckdb_init_set_error(info, "Failed to allocate projected column index array");
-		cleanup_callback_env(callback_data->vm, did_attach);
 		return;
 	}
 	std::vector<jint> projected_columns;
@@ -1834,16 +1713,15 @@ static void java_table_function_init_callback(duckdb_init_info info) {
 		                       projected_columns.data());
 	}
 	auto init_ctx = env->NewObject(J_TableInitContext, J_TableInitContext_init, projected_column_indexes);
-	env->DeleteLocalRef(projected_column_indexes);
+	delete_local_ref(env, projected_column_indexes);
 	if (env->ExceptionCheck() || !init_ctx) {
 		duckdb_init_set_error(info, "Failed to construct Java table init context");
-		cleanup_callback_env(callback_data->vm, did_attach);
 		return;
 	}
 
 	auto state =
 	    env->CallObjectMethod(callback_data->callback_ref, J_TableFunction_init, init_ctx, bind_data->bind_result_ref);
-	env->DeleteLocalRef(init_ctx);
+	delete_local_ref(env, init_ctx);
 	if (env->ExceptionCheck()) {
 		auto exception = env->ExceptionOccurred();
 		env->ExceptionClear();
@@ -1852,17 +1730,15 @@ static void java_table_function_init_callback(duckdb_init_info info) {
 			auto message = reinterpret_cast<jstring>(env->CallObjectMethod(exception, J_Throwable_getMessage));
 			if (message != nullptr) {
 				error = jstring_to_string(env, message);
-				env->DeleteLocalRef(message);
+				delete_local_ref(env, message);
 			}
-			env->DeleteLocalRef(exception);
+			delete_local_ref(env, exception);
 		}
 		duckdb_init_set_error(info, error.c_str());
-		cleanup_callback_env(callback_data->vm, did_attach);
 		return;
 	}
 	if (state == nullptr) {
 		duckdb_init_set_error(info, "Java table function init returned null");
-		cleanup_callback_env(callback_data->vm, did_attach);
 		return;
 	}
 	auto init_data = new JavaTableFunctionInitData();
@@ -1871,8 +1747,7 @@ static void java_table_function_init_callback(duckdb_init_info info) {
 	if (!init_data->state_ref) {
 		delete init_data;
 		duckdb_init_set_error(info, "Failed to create global ref for Java table init state");
-		env->DeleteLocalRef(state);
-		cleanup_callback_env(callback_data->vm, did_attach);
+		delete_local_ref(env, state);
 		return;
 	}
 	duckdb_init_set_init_data(info, init_data, destroy_java_table_function_init_data);
@@ -1882,8 +1757,7 @@ static void java_table_function_init_callback(duckdb_init_info info) {
 		duckdb_init_set_max_threads(info, 1);
 	}
 
-	env->DeleteLocalRef(state);
-	cleanup_callback_env(callback_data->vm, did_attach);
+	delete_local_ref(env, state);
 }
 
 static void java_table_function_main_callback(duckdb_function_info info, duckdb_data_chunk output) {
@@ -1893,8 +1767,8 @@ static void java_table_function_main_callback(duckdb_function_info info, duckdb_
 		duckdb_function_set_error(info, "Missing callback/init state for Java table function");
 		return;
 	}
-	bool did_attach = false;
-	auto env = get_callback_env(callback_data->vm, did_attach);
+	CallbackEnvGuard env_guard(callback_data->vm);
+	auto env = env_guard.env();
 	if (!env) {
 		duckdb_function_set_error(info, "Failed to acquire JNIEnv for Java table function callback");
 		return;
@@ -1907,7 +1781,6 @@ static void java_table_function_main_callback(duckdb_function_info info, duckdb_
 			env->ExceptionClear();
 		}
 		duckdb_function_set_error(info, "Failed to materialize Java table function output chunk");
-		cleanup_callback_env(callback_data->vm, did_attach);
 		return;
 	}
 
@@ -1916,9 +1789,8 @@ static void java_table_function_main_callback(duckdb_function_info info, duckdb_
 		if (env->ExceptionCheck()) {
 			env->ExceptionClear();
 		}
-		env->DeleteLocalRef(output_ref);
+		delete_local_ref(env, output_ref);
 		duckdb_function_set_error(info, "Failed to initialize Java table function output appender");
-		cleanup_callback_env(callback_data->vm, did_attach);
 		return;
 	}
 
@@ -1945,9 +1817,9 @@ static void java_table_function_main_callback(duckdb_function_info info, duckdb_
 			auto message = reinterpret_cast<jstring>(env->CallObjectMethod(exception, J_Throwable_getMessage));
 			if (message != nullptr) {
 				error = jstring_to_string(env, message);
-				env->DeleteLocalRef(message);
+				delete_local_ref(env, message);
 			}
-			env->DeleteLocalRef(exception);
+			delete_local_ref(env, exception);
 			if (exception == close_exception) {
 				close_exception = nullptr;
 			}
@@ -1964,11 +1836,10 @@ static void java_table_function_main_callback(duckdb_function_info info, duckdb_
 	}
 
 	if (close_exception) {
-		env->DeleteLocalRef(close_exception);
+		delete_local_ref(env, close_exception);
 	}
-	env->DeleteLocalRef(out_appender);
-	env->DeleteLocalRef(output_ref);
-	cleanup_callback_env(callback_data->vm, did_attach);
+	delete_local_ref(env, out_appender);
+	delete_local_ref(env, output_ref);
 }
 
 void _duckdb_jdbc_register_table_function(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray name_j,
@@ -2010,7 +1881,7 @@ void _duckdb_jdbc_register_table_function(JNIEnv *env, jclass, jobject conn_ref_
 		}
 		std::string logical_type_error;
 		auto parameter_logical_type = create_table_logical_type_from_java(env, parameter_type_obj, logical_type_error);
-		env->DeleteLocalRef(parameter_type_obj);
+		delete_local_ref(env, parameter_type_obj);
 		if (env->ExceptionCheck() || !parameter_logical_type) {
 			for (auto &existing_parameter_type : parameter_logical_types) {
 				duckdb_destroy_logical_type(&existing_parameter_type);
@@ -2177,14 +2048,14 @@ static jobject decimal_to_bigdecimal(JNIEnv *env, duckdb_decimal decimal, std::s
 	auto decimal_str_j = decode_charbuffer_to_jstring(env, decimal_str_ptr.get(), decimal_str_len);
 	if (env->ExceptionCheck() || !decimal_str_j) {
 		if (decimal_str_j) {
-			env->DeleteLocalRef(decimal_str_j);
+			delete_local_ref(env, decimal_str_j);
 		}
 		error = "Failed to decode DECIMAL value as UTF-8";
 		return nullptr;
 	}
 
 	auto big_decimal = env->NewObject(J_BigDecimal, J_BigDecimal_initString, decimal_str_j);
-	env->DeleteLocalRef(decimal_str_j);
+	delete_local_ref(env, decimal_str_j);
 	if (env->ExceptionCheck() || !big_decimal) {
 		error = "Failed to allocate BigDecimal for DECIMAL value";
 		return nullptr;

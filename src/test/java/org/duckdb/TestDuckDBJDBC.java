@@ -1980,6 +1980,63 @@ public class TestDuckDBJDBC {
         }
     }
 
+
+    public static void test_table_function_init_exception_message_propagation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_init_error", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"},
+                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) throws Exception {
+                    throw new Exception("tf_init_error");
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) {
+                    return 0;
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            String message =
+                assertThrows(() -> { stmt.executeQuery("SELECT * FROM tf_init_error(3)"); }, SQLException.class);
+            assertTrue(message != null && message.contains("tf_init_error"));
+        }
+    }
+
+    public static void test_table_function_main_exception_message_propagation() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerTableFunction("tf_main_error", new org.duckdb.udf.TableFunction() {
+                @Override
+                public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                    return new TableBindResult(new String[] {"i"},
+                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                                               ((Number) parameters[0]).intValue());
+                }
+
+                @Override
+                public TableState init(org.duckdb.udf.InitContext ctx, TableBindResult bind) {
+                    return new TableState(new int[] {0, ((Number) bind.getBindState()).intValue()});
+                }
+
+                @Override
+                public int produce(TableState state, org.duckdb.UdfOutputAppender out) throws Exception {
+                    throw new Exception("tf_main_error");
+                }
+            }, new TableFunctionDefinition().withParameterTypes(new DuckDBColumnType[] {DuckDBColumnType.INTEGER}));
+
+            String message =
+                assertThrows(() -> { stmt.executeQuery("SELECT * FROM tf_main_error(3)"); }, SQLException.class);
+            assertTrue(message != null && message.contains("tf_main_error"));
+        }
+    }
+
     private static long usedHeapBytes() {
         Runtime runtime = Runtime.getRuntime();
         return runtime.totalMemory() - runtime.freeMemory();
