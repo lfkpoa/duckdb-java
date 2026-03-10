@@ -899,6 +899,34 @@ public class TestBindings {
                 assertEquals(rs.getInt(1), 42);
                 assertFalse(rs.next());
             }
+
+            duckdb_register_scalar_function_java(
+                conn.connRef, "bindings_java_scalar".getBytes(UTF_8), (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        out.setInt(row, 42);
+                    }
+                }, new org.duckdb.udf.UdfLogicalType[0], org.duckdb.udf.UdfLogicalType.of(DuckDBColumnType.INTEGER),
+                false, false, true, false);
+
+            try (ResultSet rs = stmt.executeQuery("SELECT bindings_java_scalar()")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 42);
+                assertFalse(rs.next());
+            }
+
+            duckdb_register_scalar_function_java(
+                conn.connRef, "bindings_java_scalar_add1".getBytes(UTF_8), (ctx, args, out, rowCount) -> {
+                    for (int row = 0; row < rowCount; row++) {
+                        out.setInt(row, args[0].getInt(row) + 1);
+                    }
+                }, new org.duckdb.udf.UdfLogicalType[] {org.duckdb.udf.UdfLogicalType.of(DuckDBColumnType.INTEGER)},
+                org.duckdb.udf.UdfLogicalType.of(DuckDBColumnType.INTEGER), false, false, true, false);
+
+            try (ResultSet rs = stmt.executeQuery("SELECT bindings_java_scalar_add1(41)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 42);
+                assertFalse(rs.next());
+            }
         }
     }
 
@@ -922,6 +950,49 @@ public class TestBindings {
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM bindings_range_native(5)")) {
+                for (int i = 0; i < 5; i++) {
+                    assertTrue(rs.next());
+                    assertEquals(rs.getLong(1), (long) i);
+                }
+                assertFalse(rs.next());
+            }
+
+            duckdb_register_table_function_java(conn.connRef, "bindings_range_java".getBytes(UTF_8),
+                                                new org.duckdb.udf.TableFunction() {
+                                                    @Override
+                                                    public org.duckdb.udf.TableBindResult bind(
+                                                        org.duckdb.udf.BindContext ctx, Object[] parameters) {
+                                                        return new org.duckdb.udf.TableBindResult(
+                                                            new String[] {"i"},
+                                                            new org.duckdb.udf.UdfLogicalType[] {
+                                                                org.duckdb.udf.UdfLogicalType.of(
+                                                                    DuckDBColumnType.BIGINT)},
+                                                            ((Number) parameters[0]).longValue());
+                                                    }
+
+                                                    @Override
+                                                    public org.duckdb.udf.TableState init(org.duckdb.udf.InitContext ctx,
+                                                                                          org.duckdb.udf.TableBindResult bind) {
+                                                        long end = ((Number) bind.getBindState()).longValue();
+                                                        return new org.duckdb.udf.TableState(new long[] {0L, end});
+                                                    }
+
+                                                    @Override
+                                                    public int produce(org.duckdb.udf.TableState state,
+                                                                       org.duckdb.UdfOutputAppender out) {
+                                                        long[] st = (long[]) state.getState();
+                                                        int produced = 0;
+                                                        for (; produced < 64 && st[0] < st[1]; produced++, st[0]++) {
+                                                            out.beginRow().append(st[0]).endRow();
+                                                        }
+                                                        return out.getSize();
+                                                    }
+                                                },
+                                                new org.duckdb.udf.UdfLogicalType[] {
+                                                    org.duckdb.udf.UdfLogicalType.of(DuckDBColumnType.BIGINT)},
+                                                true, 4, true);
+
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM bindings_range_java(5)")) {
                 for (int i = 0; i < 5; i++) {
                     assertTrue(rs.next());
                     assertEquals(rs.getLong(1), (long) i);

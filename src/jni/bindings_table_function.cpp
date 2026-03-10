@@ -1,4 +1,5 @@
 #include "bindings.hpp"
+#include "functions.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
 #include "util.hpp"
@@ -223,6 +224,18 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1register_1table_1f
 		return -1;
 	}
 	return static_cast<jint>(duckdb_register_table_function(conn, tf));
+}
+
+extern "C" JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1register_1table_1function_1java(
+    JNIEnv *env, jclass, jobject connection, jbyteArray name, jobject callback, jobjectArray parameter_logical_types,
+    jboolean supports_projection_pushdown, jint max_threads, jboolean thread_safe) {
+	try {
+		_duckdb_jdbc_register_table_function(env, nullptr, connection, name, callback, parameter_logical_types,
+		                                     supports_projection_pushdown, max_threads, thread_safe);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+	}
 }
 
 JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1bind_1get_1parameter_1count(JNIEnv *env, jclass,

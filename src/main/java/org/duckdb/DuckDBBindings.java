@@ -2,6 +2,9 @@ package org.duckdb;
 
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
+import org.duckdb.udf.ScalarUdf;
+import org.duckdb.udf.TableFunction;
+import org.duckdb.udf.UdfLogicalType;
 
 public class DuckDBBindings {
 
@@ -142,6 +145,14 @@ public class DuckDBBindings {
 
     static native int duckdb_register_scalar_function(ByteBuffer connection, ByteBuffer scalar_function);
 
+    // Transitional bridge primitive for real Java callback registration through bindings.
+    static native void duckdb_register_scalar_function_java(ByteBuffer connection, byte[] name, ScalarUdf callback,
+                                                            UdfLogicalType[] argumentLogicalTypes,
+                                                            UdfLogicalType returnLogicalType,
+                                                            boolean nullSpecialHandling,
+                                                            boolean returnNullOnException, boolean deterministic,
+                                                            boolean varArgs);
+
     // table function
 
     static native ByteBuffer duckdb_create_table_function();
@@ -163,6 +174,12 @@ public class DuckDBBindings {
     static native void duckdb_table_function_supports_projection_pushdown(ByteBuffer table_function, boolean pushdown);
 
     static native int duckdb_register_table_function(ByteBuffer connection, ByteBuffer table_function);
+
+    // Transitional bridge primitive for real Java callback registration through bindings.
+    static native void duckdb_register_table_function_java(ByteBuffer connection, byte[] name, TableFunction callback,
+                                                           UdfLogicalType[] parameterLogicalTypes,
+                                                           boolean supportsProjectionPushdown, int maxThreads,
+                                                           boolean threadSafe);
 
     static native long duckdb_bind_get_parameter_count(ByteBuffer bind_info);
 

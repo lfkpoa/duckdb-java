@@ -1,4 +1,5 @@
 #include "bindings.hpp"
+#include "functions.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
 #include "util.hpp"
@@ -175,4 +176,18 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1
 
 	auto state = duckdb_register_scalar_function(conn, scalar_function_ptr);
 	return static_cast<jint>(state);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1function_1java(
+    JNIEnv *env, jclass, jobject connection, jbyteArray name, jobject callback, jobjectArray argument_logical_types,
+    jobject return_logical_type, jboolean null_special_handling, jboolean return_null_on_exception,
+    jboolean deterministic, jboolean var_args) {
+	try {
+		_duckdb_jdbc_register_scalar_udf(env, nullptr, connection, name, callback, argument_logical_types,
+		                                 return_logical_type, null_special_handling, return_null_on_exception,
+		                                 deterministic, var_args);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+	}
 }
