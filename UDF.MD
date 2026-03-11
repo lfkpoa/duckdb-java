@@ -75,9 +75,9 @@ For table-function output, `UdfOutputAppender` provides Java-object helpers that
 
 UDF and table-function registration now use a bindings-first JNI surface:
 
-- Java registration APIs in `DuckDBConnection` call `DuckDBBindings.duckdb_register_scalar_function_java(...)` and `DuckDBBindings.duckdb_register_table_function_java(...)`.
+- Java registration APIs in `DuckDBConnection` build function descriptors via C API-style bindings (`create_*_function`, `set_name`, options) and then call `DuckDBBindings.duckdb_register_scalar_function_java_with_function(...)` / `DuckDBBindings.duckdb_register_table_function_java_with_function(...)`.
 - JNI entry points for those methods live in `bindings_scalar_function.cpp` and `bindings_table_function.cpp`.
-- Those entry points delegate to shared native registration machinery in `duckdb_java.cpp` (`_duckdb_jdbc_register_scalar_udf` / `_duckdb_jdbc_register_table_function`) for callback lifecycle and error handling.
+- Those entry points delegate to shared native registration machinery in `duckdb_java.cpp` (`_duckdb_jdbc_register_scalar_udf_on_function` / `_duckdb_jdbc_register_table_function_on_function`) for callback lifecycle and error handling.
 - There is no separate `DuckDBNative` registration path for UDF/table-function callbacks.
 
 This keeps `DuckDBBindings` as the main Java-side C API surface while reusing the existing native callback bridge.
