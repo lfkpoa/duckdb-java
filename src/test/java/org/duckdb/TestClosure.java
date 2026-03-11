@@ -148,12 +148,14 @@ public class TestClosure {
             }
         });
         th.start();
-        assertThrows(()
-                         -> stmt.executeQuery("WITH RECURSIVE cte AS ("
-                                              + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + "
-                                              + "cte.f from cte WHERE cte.i < 150000) "
-                                              + "SELECT avg(f) FROM cte"),
-                     SQLException.class);
+        assertThrows(
+            ()
+                -> stmt.executeQuery(
+                    "WITH RECURSIVE cte AS ("
+                    +
+                    "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                    + "SELECT avg(f) FROM cte"),
+            SQLException.class);
         th.join();
         long elapsed = System.currentTimeMillis() - start;
         assertTrue(elapsed < 2000);
@@ -205,12 +207,14 @@ public class TestClosure {
                 }
             });
             th.start();
-            assertThrows(()
-                             -> stmt.executeQuery("WITH RECURSIVE cte AS ("
-                                                  + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, "
-                                                  + "cte.p + cte.f from cte WHERE cte.i < 150000) "
-                                                  + "SELECT avg(f) FROM cte"),
-                         SQLException.class);
+            assertThrows(
+                ()
+                    -> stmt.executeQuery(
+                        "WITH RECURSIVE cte AS ("
+                        +
+                        "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                        + "SELECT avg(f) FROM cte"),
+                SQLException.class);
             th.join();
             long elapsed = System.currentTimeMillis() - start;
             assertTrue(elapsed < 2000);
@@ -223,10 +227,11 @@ public class TestClosure {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();) {
             stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
             stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
-            PreparedStatement ps = conn.prepareStatement("WITH RECURSIVE cte AS ("
-                                                         + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, "
-                                                         + "cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
-                                                         + "SELECT avg(f) FROM cte"
+            PreparedStatement ps = conn.prepareStatement(
+                "WITH RECURSIVE cte AS ("
+                +
+                "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                + "SELECT avg(f) FROM cte"
 
             );
             long start = System.currentTimeMillis();
@@ -471,10 +476,12 @@ public class TestClosure {
                 }
             });
             th.start();
-            try (ResultSet rs = stmt2.executeQuery("WITH RECURSIVE cte AS ("
-                                                   + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, "
-                                                   + "cte.p + cte.f from cte WHERE cte.i < 50000) "
-                                                   + "SELECT avg(f) FROM cte")) {
+            try (
+                ResultSet rs = stmt2.executeQuery(
+                    "WITH RECURSIVE cte AS ("
+                    +
+                    "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 50000) "
+                    + "SELECT avg(f) FROM cte")) {
                 rs.next();
                 assertTrue(rs.getDouble(1) > 0);
             }
@@ -491,12 +498,13 @@ public class TestClosure {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt1 = conn.createStatement();) {
             stmt1.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
             stmt1.execute("INSERT INTO test_fib1 values(1, 0, 1)");
-            try (PreparedStatement ps1 = conn.prepareStatement("SELECT 42");
-                 PreparedStatement ps2 =
-                     conn.prepareStatement("WITH RECURSIVE cte AS ("
-                                           + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + "
-                                           + "cte.f from cte WHERE cte.i < 50000) "
-                                           + "SELECT avg(f) FROM cte")) {
+            try (
+                PreparedStatement ps1 = conn.prepareStatement("SELECT 42");
+                PreparedStatement ps2 = conn.prepareStatement(
+                    "WITH RECURSIVE cte AS ("
+                    +
+                    "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 50000) "
+                    + "SELECT avg(f) FROM cte")) {
                 long start = System.currentTimeMillis();
                 Thread th = new Thread(() -> {
                     try {
@@ -527,12 +535,14 @@ public class TestClosure {
             stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
             stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
             long start = System.currentTimeMillis();
-            assertThrows(()
-                             -> stmt.executeQuery("WITH RECURSIVE cte AS ("
-                                                  + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, "
-                                                  + "cte.p + cte.f from cte WHERE cte.i < 150000) "
-                                                  + "SELECT avg(f) FROM cte"),
-                         SQLTimeoutException.class);
+            assertThrows(
+                ()
+                    -> stmt.executeQuery(
+                        "WITH RECURSIVE cte AS ("
+                        +
+                        "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                        + "SELECT avg(f) FROM cte"),
+                SQLTimeoutException.class);
             long elapsed = System.currentTimeMillis() - start;
             assertTrue(elapsed < 1500);
             assertFalse(conn.isClosed());
@@ -550,10 +560,12 @@ public class TestClosure {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();) {
             stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
             stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
-            try (PreparedStatement ps = conn.prepareStatement("WITH RECURSIVE cte AS ("
-                                                              + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, "
-                                                              + "cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
-                                                              + "SELECT avg(f) FROM cte")) {
+            try (
+                PreparedStatement ps = conn.prepareStatement(
+                    "WITH RECURSIVE cte AS ("
+                    +
+                    "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 150000) "
+                    + "SELECT avg(f) FROM cte")) {
                 ps.setQueryTimeout(1);
                 long start = System.currentTimeMillis();
                 assertThrows(ps::executeQuery, SQLTimeoutException.class);
@@ -579,10 +591,11 @@ public class TestClosure {
             stmt.execute("CREATE TABLE test_fib1(i bigint, p double, f double)");
             stmt.execute("INSERT INTO test_fib1 values(1, 0, 1)");
             long start = System.currentTimeMillis();
-            stmt.executeQuery("WITH RECURSIVE cte AS ("
-                              + "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte "
-                              + "WHERE cte.i < 50000) "
-                              + "SELECT avg(f) FROM cte");
+            stmt.executeQuery(
+                "WITH RECURSIVE cte AS ("
+                +
+                "SELECT * from test_fib1 UNION ALL SELECT cte.i + 1, cte.f, cte.p + cte.f from cte WHERE cte.i < 50000) "
+                + "SELECT avg(f) FROM cte");
             long elapsed = System.currentTimeMillis() - start;
             assertTrue(elapsed > 1500);
         }

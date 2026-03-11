@@ -420,12 +420,12 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public void registerScalarUdf(String name, Class<?> returnType, ScalarUdf callback) throws SQLException {
-        registerScalarUdf(name, new Class<?>[0], returnType, callback, new UdfOptions());
+        registerScalarUdf(name, new Class<?>[ 0 ], returnType, callback, new UdfOptions());
     }
 
     public void registerScalarUdf(String name, Class<?> returnType, ScalarUdf callback, UdfOptions options)
         throws SQLException {
-        registerScalarUdf(name, new Class<?>[0], returnType, callback, options);
+        registerScalarUdf(name, new Class<?>[ 0 ], returnType, callback, options);
     }
 
     public void registerScalarUdf(String name, Class<?> argumentType, Class<?> returnType, ScalarUdf callback)

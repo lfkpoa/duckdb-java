@@ -734,13 +734,7 @@ class DuckDBVector {
     }
 
     Object getVariant(int idx) throws SQLException {
-        Object variantData = varlen_data[idx];
-        if (variantData == null) {
-            return null;
-        }
-        if (variantData instanceof DuckDBVector) {
-            return ((DuckDBVector) variantData).getObject(0);
-        }
-        return variantData;
+        DuckDBVector vec = (DuckDBVector) varlen_data[idx];
+        return vec.getObject(0);
     }
 }

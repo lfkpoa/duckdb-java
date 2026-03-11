@@ -179,8 +179,9 @@ public class TestBindings {
     public static void test_bindings_struct_vector() throws Exception {
         ByteBuffer intType = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER.typeId);
         ByteBuffer varcharType = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR.typeId);
-        ByteBuffer structType = duckdb_create_struct_type(
-            new ByteBuffer[] {intType, varcharType}, new byte[][] {"foo".getBytes(UTF_8), "bar".getBytes(UTF_8)});
+        ByteBuffer[] childTypes = new ByteBuffer[] {intType, varcharType};
+        byte[][] childNames = new byte[][] {"foo".getBytes(UTF_8), "bar".getBytes(UTF_8)};
+        ByteBuffer structType = duckdb_create_struct_type(childTypes, childNames);
         assertTrue(duckdb_get_type_id(structType) != DUCKDB_TYPE_INVALID.typeId);
         assertEquals(duckdb_struct_type_child_count(structType), 2L);
 
