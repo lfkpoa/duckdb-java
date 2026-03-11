@@ -60,10 +60,10 @@ conn.registerScalarUdf(
 
 `UdfOptions` controls scalar behavior:
 
-- `deterministic(true|false)`
-- `nullSpecialHandling(true|false)`
-- `returnNullOnException(true|false)`
-- `varArgs(true|false)`
+- `deterministic(true|false)`: marks whether equal inputs always produce equal output. Use `false` for non-deterministic logic (for example random/time-based behavior).
+- `nullSpecialHandling(true|false)`: when `true`, your callback receives rows that contain `NULL` input values; when `false`, DuckDB handles null propagation before callback execution.
+- `returnNullOnException(true|false)`: when `true`, Java exceptions in callback rows are returned as `NULL`; when `false`, the query fails with an error.
+- `varArgs(true|false)`: enables varargs registration (normally used via `registerScalarUdfVarArgs`).
 
 Example:
 
@@ -114,6 +114,12 @@ Table function callbacks use:
 - `bind(BindContext ctx, Object[] parameters) -> TableBindResult`
 - `init(InitContext ctx, TableBindResult bind) -> TableState`
 - `produce(TableState state, UdfOutputAppender out) -> int`
+
+What each callback does:
+
+- `bind`: runs once per invocation to validate/interpret parameters, define output schema, and create bind state.
+- `init`: runs after bind to initialize execution state (cursor/counters/chunk state).
+- `produce`: runs repeatedly to emit rows in chunks; return the number of rows produced in that call.
 
 ### Basic example
 
