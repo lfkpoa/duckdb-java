@@ -315,9 +315,18 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            DuckDBBindings.duckdb_register_table_function_java(connRef, name.getBytes(UTF_8), callback, parameterTypes,
-                                                               definition.isProjectionPushdownEnabled(),
-                                                               options.maxThreads, options.threadSafe);
+            ByteBuffer tableFunction = DuckDBBindings.duckdb_create_table_function();
+            try {
+                DuckDBBindings.duckdb_table_function_set_name(tableFunction, name.getBytes(UTF_8));
+                if (definition.isProjectionPushdownEnabled()) {
+                    DuckDBBindings.duckdb_table_function_supports_projection_pushdown(tableFunction, true);
+                }
+                DuckDBBindings.duckdb_register_table_function_java_with_function(connRef, tableFunction, callback,
+                                                                                  parameterTypes, options.maxThreads,
+                                                                                  options.threadSafe);
+            } finally {
+                DuckDBBindings.duckdb_destroy_table_function(tableFunction);
+            }
         } finally {
             connRefLock.unlock();
         }
@@ -563,9 +572,21 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            DuckDBBindings.duckdb_register_scalar_function_java(
-                connRef, name.getBytes(UTF_8), callback, argumentTypes, returnType, options.nullSpecialHandling,
-                options.returnNullOnException, options.deterministic, options.varArgs);
+            ByteBuffer scalarFunction = DuckDBBindings.duckdb_create_scalar_function();
+            try {
+                DuckDBBindings.duckdb_scalar_function_set_name(scalarFunction, name.getBytes(UTF_8));
+                if (options.nullSpecialHandling) {
+                    DuckDBBindings.duckdb_scalar_function_set_special_handling(scalarFunction);
+                }
+                if (!options.deterministic) {
+                    DuckDBBindings.duckdb_scalar_function_set_volatile(scalarFunction);
+                }
+                DuckDBBindings.duckdb_register_scalar_function_java_with_function(
+                    connRef, scalarFunction, callback, argumentTypes, returnType, options.returnNullOnException,
+                    options.varArgs);
+            } finally {
+                DuckDBBindings.duckdb_destroy_scalar_function(scalarFunction);
+            }
         } finally {
             connRefLock.unlock();
         }

@@ -132,6 +132,19 @@ extern "C" JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1registe
 	}
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_org_duckdb_DuckDBBindings_duckdb_1register_1table_1function_1java_1with_1function(
+    JNIEnv *env, jclass, jobject connection, jobject table_function, jobject callback,
+    jobjectArray parameter_logical_types, jint max_threads, jboolean thread_safe) {
+	try {
+		_duckdb_jdbc_register_table_function_on_function(env, nullptr, connection, table_function, callback,
+		                                                 parameter_logical_types, max_threads, thread_safe);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+	}
+}
+
 JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1bind_1get_1parameter_1count(JNIEnv *env, jclass,
                                                                                            jobject bind_info_buf) {
 	auto info = bind_info_buf_to_bind_info(env, bind_info_buf);

@@ -168,3 +168,18 @@ extern "C" JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1registe
 		ThrowJNI(env, error.Message().c_str());
 	}
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1function_1java_1with_1function(
+    JNIEnv *env, jclass, jobject connection, jobject scalar_function, jobject callback,
+    jobjectArray argument_logical_types, jobject return_logical_type, jboolean return_null_on_exception,
+    jboolean var_args) {
+	try {
+		_duckdb_jdbc_register_scalar_udf_on_function(env, nullptr, connection, scalar_function, callback,
+		                                             argument_logical_types, return_logical_type,
+		                                             return_null_on_exception, var_args);
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+	}
+}
