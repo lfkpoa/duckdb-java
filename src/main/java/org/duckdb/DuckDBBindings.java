@@ -80,6 +80,20 @@ public class DuckDBBindings {
 
     static native ByteBuffer duckdb_array_vector_get_child(ByteBuffer vector);
 
+    // udf vector accessors
+
+    static native byte[] duckdb_udf_get_varchar_bytes(ByteBuffer vector_ref, int row);
+
+    static native void duckdb_udf_set_varchar_bytes(ByteBuffer vector_ref, int row, byte[] value);
+
+    static native byte[] duckdb_udf_get_blob_bytes(ByteBuffer vector_ref, int row);
+
+    static native void duckdb_udf_set_blob_bytes(ByteBuffer vector_ref, int row, byte[] value);
+
+    static native java.math.BigDecimal duckdb_udf_get_decimal(ByteBuffer vector_ref, int row);
+
+    static native void duckdb_udf_set_decimal(ByteBuffer vector_ref, int row, java.math.BigDecimal value);
+
     // validity
 
     static native boolean duckdb_validity_row_is_valid(ByteBuffer validity, long row);

@@ -234,20 +234,6 @@ final class DuckDBNative {
 
     static native void duckdb_jdbc_create_extension_type(ByteBuffer conn_ref) throws SQLException;
 
-    static native byte[] duckdb_jdbc_udf_get_varchar_bytes(ByteBuffer vector_ref, int row) throws SQLException;
-
-    static native void duckdb_jdbc_udf_set_varchar_bytes(ByteBuffer vector_ref, int row, byte[] value)
-        throws SQLException;
-
-    static native byte[] duckdb_jdbc_udf_get_blob_bytes(ByteBuffer vector_ref, int row) throws SQLException;
-
-    static native void duckdb_jdbc_udf_set_blob_bytes(ByteBuffer vector_ref, int row, byte[] value) throws SQLException;
-
-    static native BigDecimal duckdb_jdbc_udf_get_decimal(ByteBuffer vector_ref, int row) throws SQLException;
-
-    static native void duckdb_jdbc_udf_set_decimal(ByteBuffer vector_ref, int row, BigDecimal value)
-        throws SQLException;
-
     protected static native String duckdb_jdbc_get_profiling_information(ByteBuffer conn_ref,
                                                                          ProfilerPrintFormat format)
         throws SQLException;
