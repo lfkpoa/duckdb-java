@@ -1,7 +1,7 @@
 #include "bindings.hpp"
-#include "functions.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
+#include "udf_registration.hpp"
 #include "util.hpp"
 
 static duckdb_scalar_function scalar_function_buf_to_scalar_function(JNIEnv *env, jobject scalar_function_buf) {

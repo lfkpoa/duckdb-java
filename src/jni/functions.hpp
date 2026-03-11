@@ -253,21 +253,6 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profil
                                                                                                  jobject param1,
                                                                                                  jobject param2);
 
-void _duckdb_jdbc_register_scalar_udf(JNIEnv *env, jclass param0, jobject param1, jbyteArray param2, jobject param3,
-                                      jobjectArray param4, jobject param5, jboolean param6, jboolean param7,
-                                      jboolean param8, jboolean param9);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1register_1scalar_1udf(
-    JNIEnv *env, jclass param0, jobject param1, jbyteArray param2, jobject param3, jobjectArray param4, jobject param5,
-    jboolean param6, jboolean param7, jboolean param8, jboolean param9);
-
-void _duckdb_jdbc_register_table_function(JNIEnv *env, jclass param0, jobject param1, jbyteArray param2, jobject param3,
-                                          jobjectArray param4, jboolean param5, jint param6, jboolean param7);
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1register_1table_1function(
-    JNIEnv *env, jclass param0, jobject param1, jbyteArray param2, jobject param3, jobjectArray param4, jboolean param5,
-    jint param6, jboolean param7);
-
 jbyteArray _duckdb_jdbc_udf_get_varchar_bytes(JNIEnv *env, jclass param0, jobject param1, jint param2);
 
 JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1udf_1get_1varchar_1bytes(JNIEnv *env,

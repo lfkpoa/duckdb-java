@@ -516,30 +516,6 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1profil
 	}
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1register_1scalar_1udf(
-    JNIEnv *env, jclass param0, jobject param1, jbyteArray param2, jobject param3, jobjectArray param4, jobject param5,
-    jboolean param6, jboolean param7, jboolean param8, jboolean param9) {
-	try {
-		return _duckdb_jdbc_register_scalar_udf(env, param0, param1, param2, param3, param4, param5, param6, param7,
-		                                        param8, param9);
-	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
-	}
-}
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1register_1table_1function(
-    JNIEnv *env, jclass param0, jobject param1, jbyteArray param2, jobject param3, jobjectArray param4, jboolean param5,
-    jint param6, jboolean param7) {
-	try {
-		return _duckdb_jdbc_register_table_function(env, param0, param1, param2, param3, param4, param5, param6,
-		                                            param7);
-	} catch (const std::exception &e) {
-		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message().c_str());
-	}
-}
-
 JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1udf_1get_1varchar_1bytes(JNIEnv *env,
                                                                                                  jclass param0,
                                                                                                  jobject param1,

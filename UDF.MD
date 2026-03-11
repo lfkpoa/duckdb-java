@@ -71,23 +71,21 @@ For table-function output, `UdfOutputAppender` provides Java-object helpers that
 - Enable `threadSafe=true` only when callback state and behavior are truly thread-safe.
 - There is currently no dedicated unregister API in this JDBC layer; cleanup follows normal connection/catalog lifecycle.
 
-## Why UDF registration is currently native (`duckdb_java.cpp`)
+## UDF registration architecture (bindings-first)
 
-Short answer: yes, this could also be implemented in the C/JNI `DuckDBBindings` layer, but it cannot be implemented purely in Java.
+UDF and table-function registration now use a bindings-first JNI surface:
 
-- DuckDB executes UDF callbacks from native execution threads and expects C function pointers plus native callback state (`extra_info`).
-- Java cannot directly provide those C callbacks; JNI must own thread attach/detach, global references, callback lifecycle, and error translation.
+- Java registration APIs in `DuckDBConnection` call `DuckDBBindings.duckdb_register_scalar_function_java(...)` and `DuckDBBindings.duckdb_register_table_function_java(...)`.
+- JNI entry points for those methods live in `bindings_scalar_function.cpp` and `bindings_table_function.cpp`.
+- Those entry points delegate to shared native registration machinery in `duckdb_java.cpp` (`_duckdb_jdbc_register_scalar_udf` / `_duckdb_jdbc_register_table_function`) for callback lifecycle and error handling.
+- There is no separate `DuckDBNative` registration path for UDF/table-function callbacks.
 
-In other words, the fundamental boundary is **native vs Java**, not specifically **`duckdb_java.cpp` vs `bindings_*.cpp`**.
+This keeps `DuckDBBindings` as the main Java-side C API surface while reusing the existing native callback bridge.
 
-### Should this move to `DuckDBBindings` C files?
+The key boundary is still **native vs Java**:
 
-It can make sense, depending on goals:
-
-- **Pros:** centralizes C API surface in bindings, makes layering more uniform, and can reduce special-case JNI entry points in `duckdb_java.cpp`.
-- **Cons:** requires new bindings for callback registration/state plumbing anyway, and still keeps critical JNI complexity in C++ (just in a different file/module).
-
-Current code keeps Java UDF runtime registration in `duckdb_java.cpp` because the callback bridge already lives there. Validation/mapping ergonomics can still evolve on Java side, but callback/lifetime machinery must remain native.
+- DuckDB executes callbacks from native execution threads and expects C function pointers plus native callback state (`extra_info`).
+- JNI must own thread attach/detach, global references, callback lifetime, and Java exception-to-SQL error translation.
 
 ## Scalar UDF ergonomic registration overloads
 

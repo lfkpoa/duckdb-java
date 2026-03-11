@@ -1,7 +1,7 @@
 #include "bindings.hpp"
-#include "functions.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
+#include "udf_registration.hpp"
 #include "util.hpp"
 
 struct BindingsRangeBindData {

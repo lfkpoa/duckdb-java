@@ -315,9 +315,9 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            DuckDBNative.duckdb_jdbc_register_table_function(connRef, name.getBytes(UTF_8), callback, parameterTypes,
-                                                             definition.isProjectionPushdownEnabled(),
-                                                             options.maxThreads, options.threadSafe);
+            DuckDBBindings.duckdb_register_table_function_java(connRef, name.getBytes(UTF_8), callback, parameterTypes,
+                                                               definition.isProjectionPushdownEnabled(),
+                                                               options.maxThreads, options.threadSafe);
         } finally {
             connRefLock.unlock();
         }
@@ -563,7 +563,7 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
-            DuckDBNative.duckdb_jdbc_register_scalar_udf(
+            DuckDBBindings.duckdb_register_scalar_function_java(
                 connRef, name.getBytes(UTF_8), callback, argumentTypes, returnType, options.nullSpecialHandling,
                 options.returnNullOnException, options.deterministic, options.varArgs);
         } finally {

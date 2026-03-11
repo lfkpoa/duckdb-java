@@ -18,6 +18,8 @@ inline void varchar_deleter(char *val) {
 	duckdb_free(val);
 }
 
+void ThrowJNI(JNIEnv *env, const char *message);
+
 void check_java_exception_and_rethrow(JNIEnv *env);
 
 JNIEnv *get_callback_env(JavaVM *vm, bool &did_attach);

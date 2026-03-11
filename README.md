@@ -32,3 +32,5 @@ Scalar UDF registration includes ergonomic overloads for:
 - Java `Class<?>` type-mapped registration.
 
 These APIs keep the same vector callback runtime. For best performance, use chunk-oriented loops (`rowCount`) and prefer explicit logical types for precision-sensitive signatures.
+
+UDF registration is routed through `DuckDBBindings` JNI entry points (bindings-first surface).
