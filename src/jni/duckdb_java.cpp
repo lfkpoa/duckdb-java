@@ -20,6 +20,7 @@ extern "C" {
 #include "holders.hpp"
 #include "refs.hpp"
 #include "types.hpp"
+#include "udf_registration_internal.hpp"
 #include "util.hpp"
 
 #include <cstdint>
@@ -1349,7 +1350,6 @@ static void java_scalar_udf_callback(duckdb_function_info info, duckdb_data_chun
 	}
 
 	delete_local_refs(env, local_refs);
-
 }
 
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
@@ -1362,10 +1362,11 @@ jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolea
 	return env->NewDirectByteBuffer(conn_ref, 0);
 }
 
-void _duckdb_jdbc_register_scalar_udf(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray name_j, jobject callback,
-                                      jobjectArray argument_logical_types_j, jobject return_logical_type_j,
-                                      jboolean special_handling, jboolean return_null_on_exception,
-                                      jboolean deterministic, jboolean var_args) {
+void duckdb_jdbc_register_scalar_udf_impl(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray name_j,
+                                          jobject callback, jobjectArray argument_logical_types_j,
+                                          jobject return_logical_type_j, jboolean special_handling,
+                                          jboolean return_null_on_exception, jboolean deterministic,
+                                          jboolean var_args) {
 	auto conn = conn_ref_buf_to_conn(env, conn_ref_buf);
 	if (env->ExceptionCheck()) {
 		return;
@@ -1842,10 +1843,10 @@ static void java_table_function_main_callback(duckdb_function_info info, duckdb_
 	delete_local_ref(env, output_ref);
 }
 
-void _duckdb_jdbc_register_table_function(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray name_j,
-                                          jobject callback, jobjectArray parameter_types_j,
-                                          jboolean supports_projection_pushdown, jint max_threads,
-                                          jboolean thread_safe) {
+void duckdb_jdbc_register_table_function_impl(JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray name_j,
+                                              jobject callback, jobjectArray parameter_types_j,
+                                              jboolean supports_projection_pushdown, jint max_threads,
+                                              jboolean thread_safe) {
 	auto conn = conn_ref_buf_to_conn(env, conn_ref_buf);
 	if (env->ExceptionCheck()) {
 		return;
