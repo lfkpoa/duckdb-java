@@ -159,9 +159,8 @@ public class DuckDBBindings {
     static native void duckdb_register_scalar_function_java(ByteBuffer connection, byte[] name, ScalarUdf callback,
                                                             UdfLogicalType[] argumentLogicalTypes,
                                                             UdfLogicalType returnLogicalType,
-                                                            boolean nullSpecialHandling,
-                                                            boolean returnNullOnException, boolean deterministic,
-                                                            boolean varArgs);
+                                                            boolean nullSpecialHandling, boolean returnNullOnException,
+                                                            boolean deterministic, boolean varArgs);
 
     static native void duckdb_register_scalar_function_java_with_function(
         ByteBuffer connection, ByteBuffer scalarFunction, ScalarUdf callback, UdfLogicalType[] argumentLogicalTypes,
@@ -186,7 +185,8 @@ public class DuckDBBindings {
                                                            boolean supportsProjectionPushdown, int maxThreads,
                                                            boolean threadSafe);
 
-    static native void duckdb_register_table_function_java_with_function(ByteBuffer connection, ByteBuffer tableFunction,
+    static native void duckdb_register_table_function_java_with_function(ByteBuffer connection,
+                                                                         ByteBuffer tableFunction,
                                                                          TableFunction callback,
                                                                          UdfLogicalType[] parameterLogicalTypes,
                                                                          int maxThreads, boolean threadSafe);

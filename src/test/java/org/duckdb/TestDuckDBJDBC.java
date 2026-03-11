@@ -1980,15 +1980,13 @@ public class TestDuckDBJDBC {
         }
     }
 
-
     public static void test_table_function_init_exception_message_propagation() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
             conn.registerTableFunction("tf_init_error", new org.duckdb.udf.TableFunction() {
                 @Override
                 public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
-                    return new TableBindResult(new String[] {"i"},
-                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
                                                ((Number) parameters[0]).intValue());
                 }
 
@@ -2015,8 +2013,7 @@ public class TestDuckDBJDBC {
             conn.registerTableFunction("tf_main_error", new org.duckdb.udf.TableFunction() {
                 @Override
                 public TableBindResult bind(org.duckdb.udf.BindContext ctx, Object[] parameters) {
-                    return new TableBindResult(new String[] {"i"},
-                                               new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
+                    return new TableBindResult(new String[] {"i"}, new DuckDBColumnType[] {DuckDBColumnType.INTEGER},
                                                ((Number) parameters[0]).intValue());
                 }
 
@@ -4806,8 +4803,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("medium_enum", asList("enum_0", "enum_299", null));
         correct_answer_map.put("large_enum", asList("enum_0", "enum_69999", null));
         correct_answer_map.put("struct", asList(abnull, ducks, null));
-        correct_answer_map.put("map",
-                               asList(mapOf(), mapOf("key1", "🦆🦆🦆🦆🦆🦆", "key2", "goose"), null));
+        correct_answer_map.put("map", asList(mapOf(), mapOf("key1", "🦆🦆🦆🦆🦆🦆", "key2", "goose"), null));
         correct_answer_map.put("union", asList("Frank", (short) 5, null));
         correct_answer_map.put(
             "time_tz", asList(OffsetTime.parse("00:00+15:59:59"), OffsetTime.parse("23:59:59.999999-15:59:59"), null));

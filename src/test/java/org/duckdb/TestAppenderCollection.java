@@ -1532,7 +1532,8 @@ public class TestAppenderCollection {
             try (DuckDBAppender appender = conn.createAppender("tab1")) {
                 appender.beginRow()
                     .append(42)
-                    .append(asList("foo".getBytes(UTF_8), "barbazboo0123456789".getBytes(UTF_8), "bar".getBytes(UTF_8)))
+                    .append(
+                        asList("foo".getBytes(UTF_8), "barbazboo0123456789".getBytes(UTF_8), "bar".getBytes(UTF_8)))
                     .endRow()
                     .beginRow()
                     .append(43)

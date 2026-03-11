@@ -321,9 +321,8 @@ public final class DuckDBConnection implements java.sql.Connection {
                 if (definition.isProjectionPushdownEnabled()) {
                     DuckDBBindings.duckdb_table_function_supports_projection_pushdown(tableFunction, true);
                 }
-                DuckDBBindings.duckdb_register_table_function_java_with_function(connRef, tableFunction, callback,
-                                                                                  parameterTypes, options.maxThreads,
-                                                                                  options.threadSafe);
+                DuckDBBindings.duckdb_register_table_function_java_with_function(
+                    connRef, tableFunction, callback, parameterTypes, options.maxThreads, options.threadSafe);
             } finally {
                 DuckDBBindings.duckdb_destroy_table_function(tableFunction);
             }
@@ -421,12 +420,12 @@ public final class DuckDBConnection implements java.sql.Connection {
     }
 
     public void registerScalarUdf(String name, Class<?> returnType, ScalarUdf callback) throws SQLException {
-        registerScalarUdf(name, new Class<?>[ 0 ], returnType, callback, new UdfOptions());
+        registerScalarUdf(name, new Class<?>[0], returnType, callback, new UdfOptions());
     }
 
     public void registerScalarUdf(String name, Class<?> returnType, ScalarUdf callback, UdfOptions options)
         throws SQLException {
-        registerScalarUdf(name, new Class<?>[ 0 ], returnType, callback, options);
+        registerScalarUdf(name, new Class<?>[0], returnType, callback, options);
     }
 
     public void registerScalarUdf(String name, Class<?> argumentType, Class<?> returnType, ScalarUdf callback)

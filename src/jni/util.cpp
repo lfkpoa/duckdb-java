@@ -44,7 +44,6 @@ void delete_global_ref(JNIEnv *env, jobject ref) {
 	}
 }
 
-
 CallbackEnvGuard::CallbackEnvGuard(JavaVM *vm_p) : vm(vm_p), jni_env(nullptr), did_attach(false) {
 	if (vm) {
 		jni_env = get_callback_env(vm, did_attach);
