@@ -858,48 +858,6 @@ public class TestBindings {
     public static void test_bindings_scalar_function() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            ByteBuffer scalarFn = duckdb_create_scalar_function();
-            ByteBuffer intType = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER.typeId);
-            try {
-                duckdb_scalar_function_set_name(scalarFn, "bindings_hello_scalar".getBytes(UTF_8));
-                duckdb_scalar_function_set_return_type(scalarFn, intType);
-                duckdb_scalar_function_set_function(scalarFn);
-                duckdb_scalar_function_set_volatile(scalarFn);
-                duckdb_scalar_function_set_special_handling(scalarFn);
-                assertEquals(duckdb_register_scalar_function(conn.connRef, scalarFn), 0);
-            } finally {
-                // The scalar function object is no longer needed after registration.
-                duckdb_destroy_scalar_function(scalarFn);
-                duckdb_destroy_logical_type(intType);
-            }
-
-            try (ResultSet rs = stmt.executeQuery("SELECT bindings_hello_scalar()")) {
-                assertTrue(rs.next());
-                assertEquals(rs.getInt(1), 42);
-                assertFalse(rs.next());
-            }
-
-            ByteBuffer scalarFnWithParam = duckdb_create_scalar_function();
-            ByteBuffer paramType = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER.typeId);
-            ByteBuffer returnType = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER.typeId);
-            try {
-                duckdb_scalar_function_set_name(scalarFnWithParam, "bindings_hello_scalar_arg".getBytes(UTF_8));
-                duckdb_scalar_function_add_parameter(scalarFnWithParam, paramType);
-                duckdb_scalar_function_set_return_type(scalarFnWithParam, returnType);
-                duckdb_scalar_function_set_function(scalarFnWithParam);
-                assertEquals(duckdb_register_scalar_function(conn.connRef, scalarFnWithParam), 0);
-            } finally {
-                duckdb_destroy_scalar_function(scalarFnWithParam);
-                duckdb_destroy_logical_type(paramType);
-                duckdb_destroy_logical_type(returnType);
-            }
-
-            try (ResultSet rs = stmt.executeQuery("SELECT bindings_hello_scalar_arg(123)")) {
-                assertTrue(rs.next());
-                assertEquals(rs.getInt(1), 42);
-                assertFalse(rs.next());
-            }
-
             duckdb_register_scalar_function_java(
                 conn.connRef, "bindings_java_scalar".getBytes(UTF_8), (ctx, args, out, rowCount) -> {
                     for (int row = 0; row < rowCount; row++) {
@@ -933,30 +891,6 @@ public class TestBindings {
     public static void test_bindings_table_function() throws Exception {
         try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
              Statement stmt = conn.createStatement()) {
-            ByteBuffer tf = duckdb_create_table_function();
-            ByteBuffer argType = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT.typeId);
-            try {
-                duckdb_table_function_set_name(tf, "bindings_range_native".getBytes(UTF_8));
-                duckdb_table_function_add_parameter(tf, argType);
-                duckdb_table_function_set_bind(tf);
-                duckdb_table_function_set_init(tf);
-                duckdb_table_function_set_local_init(tf);
-                duckdb_table_function_set_function(tf);
-                duckdb_table_function_supports_projection_pushdown(tf, true);
-                assertEquals(duckdb_register_table_function(conn.connRef, tf), 0);
-            } finally {
-                duckdb_destroy_table_function(tf);
-                duckdb_destroy_logical_type(argType);
-            }
-
-            try (ResultSet rs = stmt.executeQuery("SELECT * FROM bindings_range_native(5)")) {
-                for (int i = 0; i < 5; i++) {
-                    assertTrue(rs.next());
-                    assertEquals(rs.getLong(1), (long) i);
-                }
-                assertFalse(rs.next());
-            }
-
             duckdb_register_table_function_java(conn.connRef, "bindings_range_java".getBytes(UTF_8),
                                                 new org.duckdb.udf.TableFunction() {
                                                     @Override

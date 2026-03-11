@@ -150,9 +150,6 @@ public class DuckDBBindings {
 
     static native void duckdb_scalar_function_set_return_type(ByteBuffer scalar_function, ByteBuffer logical_type);
 
-    // For now this wires a native smoke callback that returns constant 42.
-    static native void duckdb_scalar_function_set_function(ByteBuffer scalar_function);
-
     static native void duckdb_scalar_function_set_volatile(ByteBuffer scalar_function);
 
     static native void duckdb_scalar_function_set_special_handling(ByteBuffer scalar_function);
@@ -176,14 +173,6 @@ public class DuckDBBindings {
     static native void duckdb_table_function_set_name(ByteBuffer table_function, byte[] name);
 
     static native void duckdb_table_function_add_parameter(ByteBuffer table_function, ByteBuffer logical_type);
-
-    static native void duckdb_table_function_set_bind(ByteBuffer table_function);
-
-    static native void duckdb_table_function_set_init(ByteBuffer table_function);
-
-    static native void duckdb_table_function_set_local_init(ByteBuffer table_function);
-
-    static native void duckdb_table_function_set_function(ByteBuffer table_function);
 
     static native void duckdb_table_function_supports_projection_pushdown(ByteBuffer table_function, boolean pushdown);
 

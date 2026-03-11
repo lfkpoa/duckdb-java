@@ -19,14 +19,6 @@ static duckdb_scalar_function scalar_function_buf_to_scalar_function(JNIEnv *env
 	return scalar_function;
 }
 
-static void smoke_scalar_callback(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
-	auto row_count = duckdb_data_chunk_get_size(input);
-	auto output_data = reinterpret_cast<int32_t *>(duckdb_vector_get_data(output));
-	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		output_data[row_idx] = 42;
-	}
-}
-
 /*
  * Class:     org_duckdb_DuckDBBindings
  * Method:    duckdb_create_scalar_function
@@ -110,21 +102,6 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1
 	}
 
 	duckdb_scalar_function_set_return_type(scalar_function_ptr, logical_type_ptr);
-}
-
-/*
- * Class:     org_duckdb_DuckDBBindings
- * Method:    duckdb_scalar_function_set_function
- * Signature: (Ljava/nio/ByteBuffer;)V
- */
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1function(JNIEnv *env, jclass,
-                                                                                              jobject scalar_function) {
-	auto scalar_function_ptr = scalar_function_buf_to_scalar_function(env, scalar_function);
-	if (env->ExceptionCheck()) {
-		return;
-	}
-
-	duckdb_scalar_function_set_function(scalar_function_ptr, smoke_scalar_callback);
 }
 
 /*

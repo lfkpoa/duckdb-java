@@ -4,15 +4,6 @@
 #include "udf_registration.hpp"
 #include "util.hpp"
 
-struct BindingsRangeBindData {
-	int64_t end;
-};
-
-struct BindingsRangeInitData {
-	int64_t current;
-	int64_t end;
-};
-
 static duckdb_table_function table_function_buf_to_table_function(JNIEnv *env, jobject table_function_buf) {
 	if (table_function_buf == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid table function buffer");
@@ -65,67 +56,6 @@ static duckdb_function_info function_info_buf_to_function_info(JNIEnv *env, jobj
 	return function_info;
 }
 
-static void destroy_bindings_range_bind_data(void *ptr) {
-	delete reinterpret_cast<BindingsRangeBindData *>(ptr);
-}
-
-static void destroy_bindings_range_init_data(void *ptr) {
-	delete reinterpret_cast<BindingsRangeInitData *>(ptr);
-}
-
-static void bindings_range_bind(duckdb_bind_info info) {
-	if (duckdb_bind_get_parameter_count(info) != 1) {
-		duckdb_bind_set_error(info, "bindings_range_native expects one argument");
-		return;
-	}
-	auto param = duckdb_bind_get_parameter(info, 0);
-	if (duckdb_is_null_value(param)) {
-		duckdb_destroy_value(&param);
-		duckdb_bind_set_error(info, "bindings_range_native argument cannot be NULL");
-		return;
-	}
-	auto end = duckdb_get_int64(param);
-	duckdb_destroy_value(&param);
-	if (end < 0) {
-		end = 0;
-	}
-	auto out_type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
-	duckdb_bind_add_result_column(info, "i", out_type);
-	duckdb_destroy_logical_type(&out_type);
-
-	auto bind_data = new BindingsRangeBindData();
-	bind_data->end = end;
-	duckdb_bind_set_bind_data(info, bind_data, destroy_bindings_range_bind_data);
-}
-
-static void bindings_range_init(duckdb_init_info info) {
-	auto bind_data = reinterpret_cast<BindingsRangeBindData *>(duckdb_init_get_bind_data(info));
-	if (!bind_data) {
-		duckdb_init_set_error(info, "bindings_range_native missing bind data");
-		return;
-	}
-	auto init_data = new BindingsRangeInitData();
-	init_data->current = 0;
-	init_data->end = bind_data->end;
-	duckdb_init_set_init_data(info, init_data, destroy_bindings_range_init_data);
-}
-
-static void bindings_range_function(duckdb_function_info info, duckdb_data_chunk output) {
-	auto init_data = reinterpret_cast<BindingsRangeInitData *>(duckdb_function_get_init_data(info));
-	if (!init_data) {
-		duckdb_function_set_error(info, "bindings_range_native missing init data");
-		return;
-	}
-	auto out_vector = duckdb_data_chunk_get_vector(output, 0);
-	auto out_data = reinterpret_cast<int64_t *>(duckdb_vector_get_data(out_vector));
-	auto max_count = duckdb_vector_size();
-	idx_t count = 0;
-	while (count < max_count && init_data->current < init_data->end) {
-		out_data[count++] = init_data->current++;
-	}
-	duckdb_data_chunk_set_size(output, count);
-}
-
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1table_1function(JNIEnv *env, jclass) {
 	return make_ptr_buf(env, duckdb_create_table_function());
 }
@@ -165,42 +95,6 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1table_1function_1a
 		return;
 	}
 	duckdb_table_function_add_parameter(tf, lt);
-}
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1table_1function_1set_1bind(JNIEnv *env, jclass,
-                                                                                         jobject table_function) {
-	auto tf = table_function_buf_to_table_function(env, table_function);
-	if (env->ExceptionCheck()) {
-		return;
-	}
-	duckdb_table_function_set_bind(tf, bindings_range_bind);
-}
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1table_1function_1set_1init(JNIEnv *env, jclass,
-                                                                                         jobject table_function) {
-	auto tf = table_function_buf_to_table_function(env, table_function);
-	if (env->ExceptionCheck()) {
-		return;
-	}
-	duckdb_table_function_set_init(tf, bindings_range_init);
-}
-
-JNIEXPORT void JNICALL
-Java_org_duckdb_DuckDBBindings_duckdb_1table_1function_1set_1local_1init(JNIEnv *env, jclass, jobject table_function) {
-	auto tf = table_function_buf_to_table_function(env, table_function);
-	if (env->ExceptionCheck()) {
-		return;
-	}
-	duckdb_table_function_set_local_init(tf, bindings_range_init);
-}
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1table_1function_1set_1function(JNIEnv *env, jclass,
-                                                                                             jobject table_function) {
-	auto tf = table_function_buf_to_table_function(env, table_function);
-	if (env->ExceptionCheck()) {
-		return;
-	}
-	duckdb_table_function_set_function(tf, bindings_range_function);
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1table_1function_1supports_1projection_1pushdown(
