@@ -24,13 +24,3 @@ java -cp "build/release/duckdb_jdbc_tests.jar:build/release/duckdb_jdbc.jar"  or
 ### User-Defined Functions (Java)
 
 All Java UDF documentation and examples are available in [UDF.MD](UDF.MD).
-
-Scalar UDF registration includes ergonomic overloads for:
-- arity 1..4,
-- zero-argument functions,
-- varargs registration,
-- Java `Class<?>` type-mapped registration.
-
-These APIs keep the same vector callback runtime. For best performance, use chunk-oriented loops (`rowCount`) and prefer explicit logical types for precision-sensitive signatures.
-
-UDF registration is routed through `DuckDBBindings` JNI entry points (bindings-first surface).
