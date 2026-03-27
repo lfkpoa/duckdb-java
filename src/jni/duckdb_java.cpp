@@ -24,11 +24,13 @@ extern "C" {
 
 #include <cstdint>
 #include <limits>
+#include <memory>
 
 using namespace duckdb;
 using namespace std;
 
 static jint JNI_VERSION = JNI_VERSION_1_6;
+static JavaVM *JVM_REF = nullptr;
 
 void ThrowJNI(JNIEnv *env, const char *message) {
 	D_ASSERT(J_SQLException);
@@ -40,6 +42,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION) != JNI_OK) {
 		return JNI_ERR;
 	}
+	JVM_REF = vm;
 
 	try {
 		create_refs(env);
@@ -62,6 +65,158 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 		return;
 	}
 	delete_global_refs(env);
+	JVM_REF = nullptr;
+}
+
+struct JNIEnvGuard {
+	JavaVM *vm;
+	JNIEnv *env;
+	bool detach_when_done;
+
+	explicit JNIEnvGuard(JavaVM *vm_p) : vm(vm_p), env(nullptr), detach_when_done(false) {
+		if (!vm) {
+			throw InvalidInputException("JVM is not available");
+		}
+		auto get_env_status = vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION);
+		if (get_env_status == JNI_OK) {
+			return;
+		}
+		if (get_env_status != JNI_EDETACHED) {
+			throw InvalidInputException("Failed to get JNI environment");
+		}
+		auto attach_status = vm->AttachCurrentThread(reinterpret_cast<void **>(&env), nullptr);
+		if (attach_status != JNI_OK || !env) {
+			throw InvalidInputException("Failed to attach current thread to JVM");
+		}
+		detach_when_done = true;
+	}
+
+	~JNIEnvGuard() {
+		if (detach_when_done && vm) {
+			vm->DetachCurrentThread();
+		}
+	}
+};
+
+struct JavaScalarFunctionState {
+	JavaVM *vm;
+	jobject callback;
+	jmethodID apply_method;
+	Connection *connection;
+
+	JavaScalarFunctionState(JavaVM *vm_p, jobject callback_p, jmethodID apply_method_p, Connection *connection_p)
+	    : vm(vm_p), callback(callback_p), apply_method(apply_method_p), connection(connection_p) {
+	}
+
+	~JavaScalarFunctionState() {
+		if (!vm || !callback) {
+			return;
+		}
+		try {
+			JNIEnvGuard env_guard(vm);
+			env_guard.env->DeleteGlobalRef(callback);
+		} catch (...) {
+			// noop in destructor
+		}
+	}
+};
+
+jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
+
+static string consume_java_exception_message(JNIEnv *env) {
+	auto throwable = env->ExceptionOccurred();
+	if (!throwable) {
+		return "Java exception";
+	}
+	env->ExceptionClear();
+
+	string message = "Java exception";
+	auto msg = (jstring)env->CallObjectMethod(throwable, J_Throwable_getMessage);
+	if (!env->ExceptionCheck() && msg) {
+		message = jstring_to_string(env, msg);
+	}
+	if (env->ExceptionCheck()) {
+		env->ExceptionClear();
+	}
+
+	env->DeleteLocalRef(throwable);
+	if (msg) {
+		env->DeleteLocalRef(msg);
+	}
+
+	return message;
+}
+
+static LogicalType parse_logical_type(Connection &connection, const string &type_name) {
+	LogicalType type;
+	connection.context->RunFunctionInTransaction(
+	    [&]() { type = TransformStringToLogicalType(type_name, *connection.context); });
+	return type;
+}
+
+static void execute_java_scalar_function(JavaScalarFunctionState &state, DataChunk &input, Vector &output) {
+	auto row_count = input.size();
+	if (row_count == 0) {
+		return;
+	}
+
+	JNIEnvGuard env_guard(state.vm);
+	auto *env = env_guard.env;
+
+	auto arg_count = input.ColumnCount();
+	auto arg_vectors = env->NewObjectArray(arg_count, J_DuckVector, nullptr);
+	if (!arg_vectors) {
+		throw InvalidInputException("Failed to allocate argument vector array");
+	}
+
+	for (idx_t col_idx = 0; col_idx < arg_count; col_idx++) {
+		auto &vector = input.data[col_idx];
+		auto jvec = ProcessVector(env, state.connection, vector, row_count);
+		env->SetObjectArrayElement(arg_vectors, col_idx, jvec);
+		env->DeleteLocalRef(jvec);
+	}
+
+	auto output_values =
+	    env->CallObjectMethod(state.callback, state.apply_method, arg_vectors, static_cast<jint>(row_count));
+	env->DeleteLocalRef(arg_vectors);
+
+	if (env->ExceptionCheck()) {
+		throw InvalidInputException("Java scalar function threw exception: %s", consume_java_exception_message(env));
+	}
+	if (!output_values) {
+		throw InvalidInputException("Java scalar function returned null output array");
+	}
+
+	auto output_array = reinterpret_cast<jobjectArray>(output_values);
+	auto output_size = env->GetArrayLength(output_array);
+	if (env->ExceptionCheck()) {
+		env->DeleteLocalRef(output_values);
+		throw InvalidInputException("Java scalar function must return an Object[]");
+	}
+	if (output_size != static_cast<jsize>(row_count)) {
+		env->DeleteLocalRef(output_values);
+		throw InvalidInputException("Java scalar function returned %lld rows, expected %lld",
+		                            static_cast<long long>(output_size), static_cast<long long>(row_count));
+	}
+
+	auto output_type = output.GetType();
+	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		auto cell = env->GetObjectArrayElement(output_array, row_idx);
+		auto value = to_duckdb_value(env, cell, *state.connection->context);
+		if (cell) {
+			env->DeleteLocalRef(cell);
+		}
+
+		if (value.IsNull()) {
+			value = Value(output_type);
+		} else if (value.type() != output_type) {
+			value = value.DefaultCastAs(output_type);
+		}
+
+		output.SetValue(row_idx, value);
+	}
+
+	env->DeleteLocalRef(output_values);
 }
 
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
@@ -897,6 +1052,65 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
 	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1register_1scalar_1function(
+    JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray name_j, jobjectArray parameter_types_j,
+    jbyteArray return_type_j, jobject function_j) {
+	try {
+		auto connection = get_connection(env, conn_ref_buf);
+		if (!connection) {
+			throw InvalidInputException("Invalid connection");
+		}
+		if (!function_j) {
+			throw InvalidInputException("Invalid scalar function callback");
+		}
+
+		auto function_name = jbyteArray_to_string(env, name_j);
+		auto return_type_name = jbyteArray_to_string(env, return_type_j);
+
+		duckdb::vector<LogicalType> parameter_types;
+		auto parameter_count = parameter_types_j ? env->GetArrayLength(parameter_types_j) : 0;
+		parameter_types.reserve(parameter_count);
+		for (jsize i = 0; i < parameter_count; i++) {
+			auto parameter_type_j = reinterpret_cast<jbyteArray>(env->GetObjectArrayElement(parameter_types_j, i));
+			if (!parameter_type_j) {
+				throw InvalidInputException("Invalid parameter type at index %lld", static_cast<long long>(i));
+			}
+			auto parameter_type_name = jbyteArray_to_string(env, parameter_type_j);
+			env->DeleteLocalRef(parameter_type_j);
+			parameter_types.emplace_back(parse_logical_type(*connection, parameter_type_name));
+		}
+
+		auto return_type = parse_logical_type(*connection, return_type_name);
+
+		auto callback_ref = env->NewGlobalRef(function_j);
+		if (!callback_ref) {
+			throw InvalidInputException("Could not create global reference for scalar function callback");
+		}
+
+		auto callback_class = env->GetObjectClass(function_j);
+		auto apply_method =
+		    env->GetMethodID(callback_class, "apply", "([Lorg/duckdb/DuckDBVector;I)[Ljava/lang/Object;");
+		env->DeleteLocalRef(callback_class);
+		if (!apply_method || env->ExceptionCheck()) {
+			consume_java_exception_message(env);
+			env->DeleteGlobalRef(callback_ref);
+			throw InvalidInputException("Could not find apply(DuckDBVector[], int) on scalar function callback");
+		}
+
+		auto state = std::make_shared<JavaScalarFunctionState>(JVM_REF, callback_ref, apply_method, connection);
+		scalar_function_t scalar_function = [state](DataChunk &input, ExpressionState &, Vector &output) {
+			execute_java_scalar_function(*state, input, output);
+		};
+
+		connection->context->RunFunctionInTransaction([&]() {
+			connection->CreateVectorizedFunction(function_name, parameter_types, return_type, scalar_function);
+		});
+	} catch (const std::exception &e) {
+		duckdb::ErrorData error(e);
+		ThrowJNI(env, error.Message().c_str());
+	}
 }
 
 void _duckdb_jdbc_create_extension_type(JNIEnv *env, jclass, jobject conn_buf) {

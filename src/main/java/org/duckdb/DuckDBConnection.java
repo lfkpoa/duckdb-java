@@ -524,7 +524,14 @@ public final class DuckDBConnection implements java.sql.Connection {
             if (function == null) {
                 throw new SQLException("Scalar function callback cannot be null");
             }
-            throw new SQLFeatureNotSupportedException("registerScalarFunction");
+
+            byte[][] parameterTypeBytes = new byte[parameterTypes.length][];
+            for (int i = 0; i < parameterTypes.length; i++) {
+                parameterTypeBytes[i] = parameterTypes[i].getBytes(UTF_8);
+            }
+
+            DuckDBBindings.duckdb_jdbc_register_scalar_function(connRef, name.getBytes(UTF_8), parameterTypeBytes,
+                                                                returnType.getBytes(UTF_8), function);
         } finally {
             connRefLock.unlock();
         }
