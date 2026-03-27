@@ -17,6 +17,11 @@ public class DuckDBBindings {
 
     static native long duckdb_vector_size();
 
+    // scalar function
+
+    static native void duckdb_jdbc_register_scalar_function(ByteBuffer connection, byte[] name, byte[][] parameterTypes,
+                                                            byte[] returnType, DuckDBScalarFunction function);
+
     // logical type
 
     static native ByteBuffer duckdb_create_logical_type(int duckdb_type);
