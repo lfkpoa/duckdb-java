@@ -506,6 +506,24 @@ public final class DuckDBConnection implements java.sql.Connection {
         connRefLock.lock();
         try {
             checkOpen();
+            if (name == null || name.trim().isEmpty()) {
+                throw new SQLException("Function name cannot be null or empty");
+            }
+            if (parameterTypes == null) {
+                throw new SQLException("Parameter types cannot be null");
+            }
+            for (int i = 0; i < parameterTypes.length; i++) {
+                String parameterType = parameterTypes[i];
+                if (parameterType == null || parameterType.trim().isEmpty()) {
+                    throw new SQLException("Parameter type at index " + i + " cannot be null or empty");
+                }
+            }
+            if (returnType == null || returnType.trim().isEmpty()) {
+                throw new SQLException("Return type cannot be null or empty");
+            }
+            if (function == null) {
+                throw new SQLException("Scalar function callback cannot be null");
+            }
             throw new SQLFeatureNotSupportedException("registerScalarFunction");
         } finally {
             connRefLock.unlock();
