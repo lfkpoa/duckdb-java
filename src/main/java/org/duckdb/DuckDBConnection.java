@@ -500,6 +500,11 @@ public final class DuckDBConnection implements java.sql.Connection {
         }
     }
 
+    public void registerScalarFunction(String name, String[] parameterTypes, String returnType,
+                                       DuckDBScalarFunction function) throws SQLException {
+        throw new SQLFeatureNotSupportedException("registerScalarFunction");
+    }
+
     public String getProfilingInformation(ProfilerPrintFormat format) throws SQLException {
         checkOpen();
         connRefLock.lock();
