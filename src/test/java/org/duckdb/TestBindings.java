@@ -67,8 +67,9 @@ public class TestBindings {
             assertEquals("sad".getBytes(UTF_8), duckdb_enum_dictionary_value(enumType, 0));
             duckdb_destroy_logical_type(enumType);
 
-            assertThrows(() -> { duckdb_jdbc_parse_logical_type(conn.connRef, "missing_type".getBytes(UTF_8)); },
-                         SQLException.class);
+            assertThrows(() -> {
+                duckdb_jdbc_parse_logical_type(conn.connRef, "missing_type".getBytes(UTF_8));
+            }, SQLException.class);
         }
 
         assertThrows(() -> { duckdb_jdbc_parse_logical_type(null, null); }, SQLException.class);

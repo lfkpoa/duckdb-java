@@ -325,7 +325,8 @@ static void init_java_scalar_function_capi(duckdb_init_info info) {
 	}
 }
 
-static void execute_java_scalar_function_capi(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+static void execute_java_scalar_function_capi(duckdb_function_info info, duckdb_data_chunk input,
+                                              duckdb_vector output) {
 	auto state = reinterpret_cast<JavaScalarFunctionState *>(duckdb_scalar_function_get_extra_info(info));
 	auto local_state = reinterpret_cast<JavaScalarFunctionLocalState *>(duckdb_scalar_function_get_state(info));
 	if (!state || !local_state || !local_state->env || !input || !output) {
@@ -1181,8 +1182,9 @@ extern "C" JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1s
     JNIEnv *env, jclass, jobject conn_ref_buf, jobject scalar_function_buf, jobject function_j) {
 	try {
 		install_java_scalar_function_callback(env, conn_ref_buf, scalar_function_buf, function_j,
-		                                     "(Lorg/duckdb/DuckDBDataChunkReader;ILorg/duckdb/DuckDBWritableVector;)V",
-		                                     "Could not find apply(DuckDBDataChunkReader, int, DuckDBWritableVector) on scalar function callback");
+		                                      "(Lorg/duckdb/DuckDBDataChunkReader;ILorg/duckdb/DuckDBWritableVector;)V",
+		                                      "Could not find apply(DuckDBDataChunkReader, int, DuckDBWritableVector) "
+		                                      "on scalar function callback");
 	} catch (const std::exception &e) {
 		duckdb::ErrorData error(e);
 		ThrowJNI(env, error.Message().c_str());

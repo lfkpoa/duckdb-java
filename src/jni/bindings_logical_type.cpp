@@ -1,9 +1,8 @@
 #include "bindings.hpp"
+#include "duckdb/common/types.hpp"
 #include "holders.hpp"
 #include "refs.hpp"
 #include "util.hpp"
-
-#include "duckdb/common/types.hpp"
 
 #include <cstring>
 #include <vector>
@@ -45,8 +44,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1logical
  * Signature: (Ljava/nio/ByteBuffer;[B)Ljava/nio/ByteBuffer;
  */
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1parse_1logical_1type(JNIEnv *env, jclass,
-                                                                                             jobject connection,
-                                                                                             jbyteArray type_name) {
+                                                                                            jobject connection,
+                                                                                            jbyteArray type_name) {
 
 	if (type_name == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid logical type name");
@@ -66,7 +65,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1parse_1lo
 		} else {
 			logical_type = duckdb::TransformStringToLogicalType(sql_type_name);
 		}
-		return make_ptr_buf(env, reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(std::move(logical_type))));
+		return make_ptr_buf(env,
+		                    reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(std::move(logical_type))));
 	} catch (const std::exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
 		return nullptr;

@@ -1,14 +1,14 @@
 package org.duckdb;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.duckdb.DuckDBBindings.*;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.sql.Timestamp;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -224,7 +224,9 @@ public final class DuckDBWritableVector {
             setNull(row);
             return;
         }
-        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, DuckDBTimestamp.localDateTime2Micros(value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
+        data.order(LITTLE_ENDIAN)
+            .putLong(row * Long.BYTES, DuckDBTimestamp.localDateTime2Micros(
+                                           value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
     }
 
     public void setBigDecimal(int row, BigDecimal value) throws SQLException {

@@ -1,15 +1,15 @@
 package org.duckdb;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.duckdb.DuckDBBindings.*;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.Date;
-import java.sql.Timestamp;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -173,9 +173,11 @@ public final class DuckDBReadableVector {
         requireType(DuckDBColumnType.DECIMAL);
         switch (typeInfo.storageType) {
         case DUCKDB_TYPE_SMALLINT:
-            return BigDecimal.valueOf(data.order(LITTLE_ENDIAN).getShort(row * Short.BYTES), typeInfo.decimalMeta.scale);
+            return BigDecimal.valueOf(data.order(LITTLE_ENDIAN).getShort(row * Short.BYTES),
+                                      typeInfo.decimalMeta.scale);
         case DUCKDB_TYPE_INTEGER:
-            return BigDecimal.valueOf(data.order(LITTLE_ENDIAN).getInt(row * Integer.BYTES), typeInfo.decimalMeta.scale);
+            return BigDecimal.valueOf(data.order(LITTLE_ENDIAN).getInt(row * Integer.BYTES),
+                                      typeInfo.decimalMeta.scale);
         case DUCKDB_TYPE_BIGINT:
             return BigDecimal.valueOf(data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES), typeInfo.decimalMeta.scale);
         case DUCKDB_TYPE_HUGEINT: {
@@ -183,7 +185,8 @@ public final class DuckDBReadableVector {
             slice.position(row * typeInfo.widthBytes);
             long lower = slice.getLong();
             long upper = slice.getLong();
-            return new BigDecimal(upper).multiply(ULONG_MULTIPLIER)
+            return new BigDecimal(upper)
+                .multiply(ULONG_MULTIPLIER)
                 .add(new BigDecimal(Long.toUnsignedString(lower)))
                 .scaleByPowerOfTen(typeInfo.decimalMeta.scale * -1);
         }

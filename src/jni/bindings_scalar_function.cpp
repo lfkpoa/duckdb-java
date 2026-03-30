@@ -51,8 +51,8 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1destroy_1scalar_1f
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1name(JNIEnv *env, jclass,
-                                                                                           jobject scalar_function,
-                                                                                           jbyteArray name) {
+                                                                                          jobject scalar_function,
+                                                                                          jbyteArray name) {
 	auto function = scalar_function_buf_to_scalar_function(env, scalar_function);
 	if (env->ExceptionCheck()) {
 		return;
@@ -66,8 +66,8 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1varargs(JNIEnv *env, jclass,
-                                                                                              jobject scalar_function,
-                                                                                              jobject logical_type) {
+                                                                                             jobject scalar_function,
+                                                                                             jobject logical_type) {
 	auto function = scalar_function_buf_to_scalar_function(env, scalar_function);
 	if (env->ExceptionCheck()) {
 		return;
@@ -89,7 +89,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1volatile(JNIEnv *env, jclass,
-                                                                                               jobject scalar_function) {
+                                                                                              jobject scalar_function) {
 	auto function = scalar_function_buf_to_scalar_function(env, scalar_function);
 	if (env->ExceptionCheck()) {
 		return;
@@ -98,8 +98,8 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1add_1parameter(JNIEnv *env, jclass,
-                                                                                                jobject scalar_function,
-                                                                                                jobject logical_type) {
+                                                                                               jobject scalar_function,
+                                                                                               jobject logical_type) {
 	auto function = scalar_function_buf_to_scalar_function(env, scalar_function);
 	if (env->ExceptionCheck()) {
 		return;
@@ -111,9 +111,8 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1
 	duckdb_scalar_function_add_parameter(function, type);
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1return_1type(JNIEnv *env, jclass,
-                                                                                                   jobject scalar_function,
-                                                                                                   jobject logical_type) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1scalar_1function_1set_1return_1type(
+    JNIEnv *env, jclass, jobject scalar_function, jobject logical_type) {
 	auto function = scalar_function_buf_to_scalar_function(env, scalar_function);
 	if (env->ExceptionCheck()) {
 		return;
@@ -140,7 +139,7 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1
 }
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1scalar_1function_1set(JNIEnv *env, jclass,
-                                                                                                jbyteArray name) {
+                                                                                               jbyteArray name) {
 	if (name == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid scalar function set name");
 		return nullptr;
@@ -149,8 +148,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1create_1scalar_
 	return make_ptr_buf(env, duckdb_create_scalar_function_set(function_name.c_str()));
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1destroy_1scalar_1function_1set(JNIEnv *env, jclass,
-                                                                                            jobject scalar_function_set) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1destroy_1scalar_1function_1set(
+    JNIEnv *env, jclass, jobject scalar_function_set) {
 	auto function_set = scalar_function_set_buf_to_set(env, scalar_function_set);
 	if (env->ExceptionCheck()) {
 		return;
@@ -158,9 +157,8 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1destroy_1scalar_1f
 	duckdb_destroy_scalar_function_set(&function_set);
 }
 
-JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1add_1scalar_1function_1to_1set(JNIEnv *env, jclass,
-                                                                                              jobject scalar_function_set,
-                                                                                              jobject scalar_function) {
+JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1add_1scalar_1function_1to_1set(
+    JNIEnv *env, jclass, jobject scalar_function_set, jobject scalar_function) {
 	auto function_set = scalar_function_set_buf_to_set(env, scalar_function_set);
 	if (env->ExceptionCheck()) {
 		return static_cast<jint>(DuckDBError);
@@ -172,9 +170,8 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1add_1scalar_1funct
 	return static_cast<jint>(duckdb_add_scalar_function_to_set(function_set, function));
 }
 
-JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1function_1set(JNIEnv *env, jclass,
-                                                                                               jobject connection,
-                                                                                               jobject scalar_function_set) {
+JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1register_1scalar_1function_1set(
+    JNIEnv *env, jclass, jobject connection, jobject scalar_function_set) {
 	auto conn = conn_ref_buf_to_conn(env, connection);
 	if (env->ExceptionCheck()) {
 		return static_cast<jint>(DuckDBError);

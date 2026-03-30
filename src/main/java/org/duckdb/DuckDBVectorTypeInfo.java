@@ -29,7 +29,8 @@ final class DuckDBVectorTypeInfo {
         }
 
         try {
-            DuckDBBindings.CAPIType capiType = DuckDBBindings.CAPIType.capiTypeFromTypeId(duckdb_get_type_id(logicalType));
+            DuckDBBindings.CAPIType capiType =
+                DuckDBBindings.CAPIType.capiTypeFromTypeId(duckdb_get_type_id(logicalType));
             switch (capiType) {
             case DUCKDB_TYPE_BOOLEAN:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.BOOLEAN, capiType, capiType, 1, null);
@@ -70,9 +71,9 @@ final class DuckDBVectorTypeInfo {
             case DUCKDB_TYPE_DECIMAL: {
                 DuckDBBindings.CAPIType internalType =
                     DuckDBBindings.CAPIType.capiTypeFromTypeId(duckdb_decimal_internal_type(logicalType));
-                DuckDBColumnTypeMetaData decimalMeta = new DuckDBColumnTypeMetaData((short) (internalType.widthBytes * 8),
-                                                                                    (short) duckdb_decimal_width(logicalType),
-                                                                                    (short) duckdb_decimal_scale(logicalType));
+                DuckDBColumnTypeMetaData decimalMeta = new DuckDBColumnTypeMetaData(
+                    (short) (internalType.widthBytes * 8), (short) duckdb_decimal_width(logicalType),
+                    (short) duckdb_decimal_scale(logicalType));
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.DECIMAL, capiType, internalType,
                                                 (int) internalType.widthBytes, decimalMeta);
             }

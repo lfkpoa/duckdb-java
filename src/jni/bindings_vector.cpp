@@ -27,8 +27,8 @@ static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
  * Signature: (Ljava/nio/ByteBuffer;J)[B
  */
 JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varchar_1string_1bytes(JNIEnv *env, jclass,
-                                                                                                  jobject vector_data,
-                                                                                                  jlong row) {
+                                                                                                 jobject vector_data,
+                                                                                                 jlong row) {
 
 	if (vector_data == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid vector data buffer");
