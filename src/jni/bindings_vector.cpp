@@ -2,6 +2,7 @@
 #include "refs.hpp"
 #include "util.hpp"
 
+#include <cstdint>
 #include <vector>
 
 static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
@@ -19,6 +20,27 @@ static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
 	}
 
 	return vector;
+}
+
+/*
+ * Class:     org_duckdb_DuckDBBindings
+ * Method:    duckdb_jdbc_create_data_buffer
+ * Signature: (JJ)Ljava/nio/ByteBuffer;
+ */
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1create_1data_1buffer(JNIEnv *env, jclass,
+                                                                                             jlong address,
+                                                                                             jlong size_bytes) {
+
+	if (address == 0) {
+		env->ThrowNew(J_SQLException, "Invalid data address");
+		return nullptr;
+	}
+	idx_t size = jlong_to_idx(env, size_bytes);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	auto ptr = reinterpret_cast<void *>(static_cast<uintptr_t>(address));
+	return make_data_buf(env, ptr, size);
 }
 
 /*

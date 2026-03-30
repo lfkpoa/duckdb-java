@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.duckdb.DuckDBBindings.*;
 
@@ -9,6 +10,8 @@ import java.nio.ByteBuffer;
 import java.sql.SQLException;
 
 public final class DuckDBWritableVector {
+    private static final BigInteger UINT64_MAX = new BigInteger("18446744073709551615");
+
     private final ByteBuffer vectorRef;
     private final int rowCount;
     private final DuckDBVectorTypeInfo typeInfo;
@@ -58,16 +61,59 @@ public final class DuckDBWritableVector {
         data.order(LITTLE_ENDIAN).putShort(row * Short.BYTES, value);
     }
 
+    public void setUint8(int row, int value) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.UTINYINT);
+        checkUnsignedRange("UTINYINT", value, 0xFFL);
+        data.put(row, (byte) value);
+    }
+
+    public void setUint16(int row, int value) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.USMALLINT);
+        checkUnsignedRange("USMALLINT", value, 0xFFFFL);
+        data.order(LITTLE_ENDIAN).putShort(row * Short.BYTES, (short) value);
+    }
+
     public void setInt(int row, int value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.INTEGER);
         data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, value);
     }
 
+    public void setUint32(int row, long value) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.UINTEGER);
+        checkUnsignedRange("UINTEGER", value, 0xFFFFFFFFL);
+        data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, (int) value);
+    }
+
     public void setLong(int row, long value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.BIGINT);
         data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, value);
+    }
+
+    public void setUint64(int row, BigInteger value) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.UBIGINT);
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        if (value.signum() < 0 || value.compareTo(UINT64_MAX) > 0) {
+            throw new SQLException("Value out of range for UBIGINT: " + value);
+        }
+        byte[] bytes = new byte[Long.BYTES];
+        byte[] source = value.toByteArray();
+        int copyLength = Math.min(source.length, Long.BYTES);
+        for (int i = 0; i < copyLength; i++) {
+            bytes[Long.BYTES - copyLength + i] = source[source.length - copyLength + i];
+        }
+        reverseInPlace(bytes);
+        ByteBuffer slice = data.duplicate();
+        slice.position(row * Long.BYTES);
+        slice.put(bytes);
     }
 
     public void setFloat(int row, float value) throws SQLException {
@@ -113,6 +159,16 @@ public final class DuckDBWritableVector {
         }
     }
 
+    public void setString(int row, String value) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.VARCHAR);
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        duckdb_vector_assign_string_element_len(vectorRef, row, value.getBytes(UTF_8));
+    }
+
     ByteBuffer vectorRef() {
         return vectorRef;
     }
@@ -137,6 +193,20 @@ public final class DuckDBWritableVector {
     private void checkRowIndex(int row) {
         if (row < 0 || row >= rowCount) {
             throw new IndexOutOfBoundsException("Row index out of bounds: " + row);
+        }
+    }
+
+    private static void checkUnsignedRange(String typeName, long value, long maxValue) throws SQLException {
+        if (value < 0 || value > maxValue) {
+            throw new SQLException("Value out of range for " + typeName + ": " + value);
+        }
+    }
+
+    private static void reverseInPlace(byte[] bytes) {
+        for (int i = 0; i < bytes.length / 2; i++) {
+            byte tmp = bytes[i];
+            bytes[i] = bytes[bytes.length - 1 - i];
+            bytes[bytes.length - 1 - i] = tmp;
         }
     }
 }

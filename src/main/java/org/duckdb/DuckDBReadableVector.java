@@ -1,5 +1,6 @@
 package org.duckdb;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.duckdb.DuckDBBindings.*;
 
@@ -9,6 +10,11 @@ import java.nio.ByteBuffer;
 import java.sql.SQLException;
 
 public final class DuckDBReadableVector {
+    private static final int STRING_T_SIZE_BYTES = 16;
+    private static final int STRING_INLINE_LENGTH_BYTES = 12;
+    private static final int STRING_LENGTH_OFFSET = 0;
+    private static final int STRING_INLINE_OFFSET = 4;
+    private static final int STRING_PTR_OFFSET = 8;
     private static final BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
 
     private final ByteBuffer vectorRef;
@@ -64,16 +70,45 @@ public final class DuckDBReadableVector {
         return data.order(LITTLE_ENDIAN).getShort(row * Short.BYTES);
     }
 
+    public short getUint8(int row) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.UTINYINT);
+        return (short) Byte.toUnsignedInt(data.get(row));
+    }
+
+    public int getUint16(int row) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.USMALLINT);
+        return Short.toUnsignedInt(data.order(LITTLE_ENDIAN).getShort(row * Short.BYTES));
+    }
+
     public int getInt(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.INTEGER);
         return data.order(LITTLE_ENDIAN).getInt(row * Integer.BYTES);
     }
 
+    public long getUint32(int row) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.UINTEGER);
+        return Integer.toUnsignedLong(data.order(LITTLE_ENDIAN).getInt(row * Integer.BYTES));
+    }
+
     public long getLong(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.BIGINT);
         return data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES);
+    }
+
+    public BigInteger getUint64(int row) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.UBIGINT);
+        byte[] bytes = new byte[Long.BYTES];
+        ByteBuffer slice = data.duplicate();
+        slice.position(row * Long.BYTES);
+        slice.get(bytes);
+        reverseInPlace(bytes);
+        return new BigInteger(1, bytes);
     }
 
     public float getFloat(int row) throws SQLException {
@@ -112,6 +147,24 @@ public final class DuckDBReadableVector {
         }
     }
 
+    public String getString(int row) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.VARCHAR);
+        int offset = row * STRING_T_SIZE_BYTES;
+        ByteBuffer slice = data.duplicate().order(LITTLE_ENDIAN);
+        int length = slice.getInt(offset + STRING_LENGTH_OFFSET);
+        byte[] bytes = new byte[length];
+        if (length <= STRING_INLINE_LENGTH_BYTES) {
+            slice.position(offset + STRING_INLINE_OFFSET);
+            slice.get(bytes);
+            return new String(bytes, UTF_8);
+        }
+        long address = slice.getLong(offset + STRING_PTR_OFFSET);
+        ByteBuffer strData = duckdb_jdbc_create_data_buffer(address, length);
+        strData.get(bytes);
+        return new String(bytes, UTF_8);
+    }
+
     ByteBuffer vectorRef() {
         return vectorRef;
     }
@@ -125,6 +178,14 @@ public final class DuckDBReadableVector {
     private void checkRowIndex(int row) {
         if (row < 0 || row >= rowCount) {
             throw new IndexOutOfBoundsException("Row index out of bounds: " + row);
+        }
+    }
+
+    private static void reverseInPlace(byte[] bytes) {
+        for (int i = 0; i < bytes.length / 2; i++) {
+            byte tmp = bytes[i];
+            bytes[i] = bytes[bytes.length - 1 - i];
+            bytes[bytes.length - 1 - i] = tmp;
         }
     }
 }

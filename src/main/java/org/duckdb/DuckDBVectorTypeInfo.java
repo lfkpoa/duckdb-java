@@ -35,16 +35,26 @@ final class DuckDBVectorTypeInfo {
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.BOOLEAN, capiType, capiType, 1, null);
             case DUCKDB_TYPE_TINYINT:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.TINYINT, capiType, capiType, 1, null);
+            case DUCKDB_TYPE_UTINYINT:
+                return new DuckDBVectorTypeInfo(DuckDBColumnType.UTINYINT, capiType, capiType, 1, null);
             case DUCKDB_TYPE_SMALLINT:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.SMALLINT, capiType, capiType, 2, null);
+            case DUCKDB_TYPE_USMALLINT:
+                return new DuckDBVectorTypeInfo(DuckDBColumnType.USMALLINT, capiType, capiType, 2, null);
             case DUCKDB_TYPE_INTEGER:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.INTEGER, capiType, capiType, 4, null);
+            case DUCKDB_TYPE_UINTEGER:
+                return new DuckDBVectorTypeInfo(DuckDBColumnType.UINTEGER, capiType, capiType, 4, null);
             case DUCKDB_TYPE_BIGINT:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.BIGINT, capiType, capiType, 8, null);
+            case DUCKDB_TYPE_UBIGINT:
+                return new DuckDBVectorTypeInfo(DuckDBColumnType.UBIGINT, capiType, capiType, 8, null);
             case DUCKDB_TYPE_FLOAT:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.FLOAT, capiType, capiType, 4, null);
             case DUCKDB_TYPE_DOUBLE:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.DOUBLE, capiType, capiType, 8, null);
+            case DUCKDB_TYPE_VARCHAR:
+                return new DuckDBVectorTypeInfo(DuckDBColumnType.VARCHAR, capiType, capiType, 16, null);
             case DUCKDB_TYPE_DECIMAL: {
                 DuckDBBindings.CAPIType internalType =
                     DuckDBBindings.CAPIType.capiTypeFromTypeId(duckdb_decimal_internal_type(logicalType));
