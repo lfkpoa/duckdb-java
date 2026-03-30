@@ -504,6 +504,9 @@ public final class DuckDBConnection implements java.sql.Connection {
                                        DuckDBScalarFunction function) throws SQLException {
         checkOpen();
         connRefLock.lock();
+        ByteBuffer scalarFunction = null;
+        ByteBuffer returnLogicalType = null;
+        ByteBuffer[] parameterLogicalTypes = null;
         try {
             checkOpen();
             if (name == null || name.trim().isEmpty()) {
@@ -525,14 +528,37 @@ public final class DuckDBConnection implements java.sql.Connection {
                 throw new SQLException("Scalar function callback cannot be null");
             }
 
-            byte[][] parameterTypeBytes = new byte[parameterTypes.length][];
+            scalarFunction = DuckDBBindings.duckdb_create_scalar_function();
+            DuckDBBindings.duckdb_scalar_function_set_name(scalarFunction, name.getBytes(UTF_8));
+
+            parameterLogicalTypes = new ByteBuffer[parameterTypes.length];
             for (int i = 0; i < parameterTypes.length; i++) {
-                parameterTypeBytes[i] = parameterTypes[i].getBytes(UTF_8);
+                parameterLogicalTypes[i] =
+                    DuckDBBindings.duckdb_jdbc_parse_logical_type(connRef, parameterTypes[i].getBytes(UTF_8));
+                DuckDBBindings.duckdb_scalar_function_add_parameter(scalarFunction, parameterLogicalTypes[i]);
             }
 
-            DuckDBBindings.duckdb_jdbc_register_scalar_function(connRef, name.getBytes(UTF_8), parameterTypeBytes,
-                                                                returnType.getBytes(UTF_8), function);
+            returnLogicalType = DuckDBBindings.duckdb_jdbc_parse_logical_type(connRef, returnType.getBytes(UTF_8));
+            DuckDBBindings.duckdb_scalar_function_set_return_type(scalarFunction, returnLogicalType);
+            DuckDBBindings.duckdb_jdbc_scalar_function_set_callback(connRef, scalarFunction, function);
+
+            if (DuckDBBindings.duckdb_register_scalar_function(connRef, scalarFunction) != 0) {
+                throw new SQLException("Failed to register scalar function '" + name + "'");
+            }
         } finally {
+            if (returnLogicalType != null) {
+                DuckDBBindings.duckdb_destroy_logical_type(returnLogicalType);
+            }
+            if (parameterLogicalTypes != null) {
+                for (ByteBuffer parameterLogicalType : parameterLogicalTypes) {
+                    if (parameterLogicalType != null) {
+                        DuckDBBindings.duckdb_destroy_logical_type(parameterLogicalType);
+                    }
+                }
+            }
+            if (scalarFunction != null) {
+                DuckDBBindings.duckdb_destroy_scalar_function(scalarFunction);
+            }
             connRefLock.unlock();
         }
     }

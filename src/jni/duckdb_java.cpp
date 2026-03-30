@@ -121,6 +121,20 @@ struct JavaScalarFunctionState {
 	}
 };
 
+static duckdb_scalar_function scalar_function_buf_to_scalar_function(JNIEnv *env, jobject scalar_function_buf) {
+	if (scalar_function_buf == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid scalar function buffer");
+		return nullptr;
+	}
+
+	auto scalar_function = reinterpret_cast<duckdb_scalar_function>(env->GetDirectBufferAddress(scalar_function_buf));
+	if (scalar_function == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid scalar function");
+		return nullptr;
+	}
+	return scalar_function;
+}
+
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
 
 static string consume_java_exception_message(JNIEnv *env) {
@@ -145,13 +159,6 @@ static string consume_java_exception_message(JNIEnv *env) {
 	}
 
 	return message;
-}
-
-static LogicalType parse_logical_type(Connection &connection, const string &type_name) {
-	LogicalType type;
-	connection.context->RunFunctionInTransaction(
-	    [&]() { type = TransformStringToLogicalType(type_name, *connection.context); });
-	return type;
 }
 
 static void execute_java_scalar_function(JavaScalarFunctionState &state, DataChunk &input, Vector &output) {
@@ -217,6 +224,29 @@ static void execute_java_scalar_function(JavaScalarFunctionState &state, DataChu
 	}
 
 	env->DeleteLocalRef(output_values);
+}
+
+static void destroy_java_scalar_function_state(void *extra_info) {
+	if (!extra_info) {
+		return;
+	}
+	delete reinterpret_cast<JavaScalarFunctionState *>(extra_info);
+}
+
+static void execute_java_scalar_function_capi(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+	auto state = reinterpret_cast<JavaScalarFunctionState *>(duckdb_scalar_function_get_extra_info(info));
+	if (!state || !input || !output) {
+		duckdb_scalar_function_set_error(info, "Invalid Java scalar function callback state");
+		return;
+	}
+
+	try {
+		auto &input_chunk = *reinterpret_cast<DataChunk *>(input);
+		auto &output_vector = *reinterpret_cast<Vector *>(output);
+		execute_java_scalar_function(*state, input_chunk, output_vector);
+	} catch (const std::exception &e) {
+		duckdb_scalar_function_set_error(info, e.what());
+	}
 }
 
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
@@ -1054,35 +1084,20 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1register_1scalar_1function(
-    JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray name_j, jobjectArray parameter_types_j,
-    jbyteArray return_type_j, jobject function_j) {
+extern "C" JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1scalar_1function_1set_1callback(
+    JNIEnv *env, jclass, jobject conn_ref_buf, jobject scalar_function_buf, jobject function_j) {
 	try {
 		auto connection = get_connection(env, conn_ref_buf);
 		if (!connection) {
 			throw InvalidInputException("Invalid connection");
 		}
+		auto scalar_function = scalar_function_buf_to_scalar_function(env, scalar_function_buf);
+		if (env->ExceptionCheck()) {
+			return;
+		}
 		if (!function_j) {
 			throw InvalidInputException("Invalid scalar function callback");
 		}
-
-		auto function_name = jbyteArray_to_string(env, name_j);
-		auto return_type_name = jbyteArray_to_string(env, return_type_j);
-
-		duckdb::vector<LogicalType> parameter_types;
-		auto parameter_count = parameter_types_j ? env->GetArrayLength(parameter_types_j) : 0;
-		parameter_types.reserve(parameter_count);
-		for (jsize i = 0; i < parameter_count; i++) {
-			auto parameter_type_j = reinterpret_cast<jbyteArray>(env->GetObjectArrayElement(parameter_types_j, i));
-			if (!parameter_type_j) {
-				throw InvalidInputException("Invalid parameter type at index %lld", static_cast<long long>(i));
-			}
-			auto parameter_type_name = jbyteArray_to_string(env, parameter_type_j);
-			env->DeleteLocalRef(parameter_type_j);
-			parameter_types.emplace_back(parse_logical_type(*connection, parameter_type_name));
-		}
-
-		auto return_type = parse_logical_type(*connection, return_type_name);
 
 		auto callback_ref = env->NewGlobalRef(function_j);
 		if (!callback_ref) {
@@ -1099,14 +1114,9 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1register_1sc
 			throw InvalidInputException("Could not find apply(DuckDBVector[], int) on scalar function callback");
 		}
 
-		auto state = std::make_shared<JavaScalarFunctionState>(JVM_REF, callback_ref, apply_method, connection);
-		scalar_function_t scalar_function = [state](DataChunk &input, ExpressionState &, Vector &output) {
-			execute_java_scalar_function(*state, input, output);
-		};
-
-		connection->context->RunFunctionInTransaction([&]() {
-			connection->CreateVectorizedFunction(function_name, parameter_types, return_type, scalar_function);
-		});
+		auto state = new JavaScalarFunctionState(JVM_REF, callback_ref, apply_method, connection);
+		duckdb_scalar_function_set_extra_info(scalar_function, state, destroy_java_scalar_function_state);
+		duckdb_scalar_function_set_function(scalar_function, execute_java_scalar_function_capi);
 	} catch (const std::exception &e) {
 		duckdb::ErrorData error(e);
 		ThrowJNI(env, error.Message().c_str());

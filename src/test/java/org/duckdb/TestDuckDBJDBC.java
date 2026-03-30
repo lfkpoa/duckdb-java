@@ -1990,6 +1990,36 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_register_scalar_function() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarFunction("java_add_one", new String[] {"INTEGER"}, "INTEGER", (args, rowCount) -> {
+                Object[] out = new Object[rowCount];
+                for (int i = 0; i < rowCount; i++) {
+                    Integer value = (Integer) args[0].getObject(i);
+                    out[i] = value == null ? null : value + 1;
+                }
+                return out;
+            });
+
+            try (ResultSet rs = stmt.executeQuery("SELECT java_add_one(i) FROM (VALUES (1), (NULL), (41)) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 2);
+                assertFalse(rs.wasNull());
+
+                assertTrue(rs.next());
+                assertEquals(rs.getObject(1), null);
+                assertTrue(rs.wasNull());
+
+                assertTrue(rs.next());
+                assertEquals(rs.getInt(1), 42);
+                assertFalse(rs.wasNull());
+
+                assertFalse(rs.next());
+            }
+        }
+    }
+
     public static void test_get_profiling_information() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             stmt.execute("SET enable_profiling = 'no_output';");

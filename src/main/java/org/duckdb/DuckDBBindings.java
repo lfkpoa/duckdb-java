@@ -19,8 +19,34 @@ public class DuckDBBindings {
 
     // scalar function
 
-    static native void duckdb_jdbc_register_scalar_function(ByteBuffer connection, byte[] name, byte[][] parameterTypes,
-                                                            byte[] returnType, DuckDBScalarFunction function);
+    static native ByteBuffer duckdb_create_scalar_function();
+
+    static native void duckdb_destroy_scalar_function(ByteBuffer scalarFunction);
+
+    static native void duckdb_scalar_function_set_name(ByteBuffer scalarFunction, byte[] name);
+
+    static native void duckdb_scalar_function_set_varargs(ByteBuffer scalarFunction, ByteBuffer logicalType);
+
+    static native void duckdb_scalar_function_set_special_handling(ByteBuffer scalarFunction);
+
+    static native void duckdb_scalar_function_set_volatile(ByteBuffer scalarFunction);
+
+    static native void duckdb_scalar_function_add_parameter(ByteBuffer scalarFunction, ByteBuffer logicalType);
+
+    static native void duckdb_scalar_function_set_return_type(ByteBuffer scalarFunction, ByteBuffer logicalType);
+
+    static native int duckdb_register_scalar_function(ByteBuffer connection, ByteBuffer scalarFunction);
+
+    static native ByteBuffer duckdb_create_scalar_function_set(byte[] name);
+
+    static native void duckdb_destroy_scalar_function_set(ByteBuffer scalarFunctionSet);
+
+    static native int duckdb_add_scalar_function_to_set(ByteBuffer scalarFunctionSet, ByteBuffer scalarFunction);
+
+    static native int duckdb_register_scalar_function_set(ByteBuffer connection, ByteBuffer scalarFunctionSet);
+
+    static native void duckdb_jdbc_scalar_function_set_callback(ByteBuffer connection, ByteBuffer scalarFunction,
+                                                                DuckDBScalarFunction function);
 
     // logical type
 
