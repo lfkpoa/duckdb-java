@@ -188,66 +188,98 @@ static void get_or_attach_jni_env(JavaVM *vm, JNIEnv *&env, bool &detach_when_do
 	detach_when_done = true;
 }
 
-static void execute_java_scalar_function(JNIEnv *env, JavaScalarFunctionState &state, DataChunk &input, Vector &output) {
+static void execute_java_vectorized_scalar_function(JNIEnv *env, JavaScalarFunctionState &state, DataChunk &input,
+                                                    Vector &output) {
 	auto row_count = input.size();
-	if (row_count == 0) {
-		return;
+	jobject input_chunk_buf = make_ptr_buf(env, &input);
+	jobject output_vector_buf = make_ptr_buf(env, &output);
+	auto input_reader = env->NewObject(J_DuckDataChunkReader, J_DuckDataChunkReader_init, input_chunk_buf,
+	                                   static_cast<jint>(row_count));
+	if (env->ExceptionCheck()) {
+		if (input_chunk_buf) {
+			env->DeleteLocalRef(input_chunk_buf);
+		}
+		if (output_vector_buf) {
+			env->DeleteLocalRef(output_vector_buf);
+		}
+		throw InvalidInputException("Could not create DuckDBDataChunkReader: %s", consume_java_exception_message(env));
 	}
 
-	auto arg_count = input.ColumnCount();
-	auto arg_vectors = env->NewObjectArray(arg_count, J_DuckVector, nullptr);
-	if (!arg_vectors) {
-		throw InvalidInputException("Failed to allocate argument vector array");
+	auto output_writer = env->NewObject(J_DuckWritableVector, J_DuckWritableVector_init, output_vector_buf,
+	                                    static_cast<jint>(row_count));
+	if (env->ExceptionCheck()) {
+		env->DeleteLocalRef(input_reader);
+		if (input_chunk_buf) {
+			env->DeleteLocalRef(input_chunk_buf);
+		}
+		if (output_vector_buf) {
+			env->DeleteLocalRef(output_vector_buf);
+		}
+		throw InvalidInputException("Could not create DuckDBWritableVector: %s", consume_java_exception_message(env));
 	}
 
-	for (idx_t col_idx = 0; col_idx < arg_count; col_idx++) {
-		auto &vector = input.data[col_idx];
-		auto jvec = ProcessVector(env, state.connection, vector, row_count);
-		env->SetObjectArrayElement(arg_vectors, col_idx, jvec);
-		env->DeleteLocalRef(jvec);
-	}
+	env->CallVoidMethod(state.callback, state.apply_method, input_reader, static_cast<jint>(row_count), output_writer);
 
-	auto output_values =
-	    env->CallObjectMethod(state.callback, state.apply_method, arg_vectors, static_cast<jint>(row_count));
-	env->DeleteLocalRef(arg_vectors);
+	env->DeleteLocalRef(output_writer);
+	env->DeleteLocalRef(input_reader);
+	if (input_chunk_buf) {
+		env->DeleteLocalRef(input_chunk_buf);
+	}
+	if (output_vector_buf) {
+		env->DeleteLocalRef(output_vector_buf);
+	}
 
 	if (env->ExceptionCheck()) {
 		throw InvalidInputException("Java scalar function threw exception: %s", consume_java_exception_message(env));
 	}
-	if (!output_values) {
-		throw InvalidInputException("Java scalar function returned null output array");
-	}
+}
 
-	auto output_array = reinterpret_cast<jobjectArray>(output_values);
-	auto output_size = env->GetArrayLength(output_array);
+static void destroy_java_scalar_function_state(void *extra_info);
+static void init_java_scalar_function_capi(duckdb_init_info info);
+static void execute_java_scalar_function_capi(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output);
+
+static jmethodID get_scalar_callback_method(JNIEnv *env, jobject function_j, const char *signature,
+                                            const char *error_message) {
+	auto callback_class = env->GetObjectClass(function_j);
+	auto apply_method = env->GetMethodID(callback_class, "apply", signature);
+	env->DeleteLocalRef(callback_class);
+	if (!apply_method || env->ExceptionCheck()) {
+		consume_java_exception_message(env);
+		throw InvalidInputException("%s", error_message);
+	}
+	return apply_method;
+}
+
+static void install_java_scalar_function_callback(JNIEnv *env, jobject conn_ref_buf, jobject scalar_function_buf,
+                                                  jobject function_j, const char *signature,
+                                                  const char *error_message) {
+	auto connection = get_connection(env, conn_ref_buf);
+	if (!connection) {
+		throw InvalidInputException("Invalid connection");
+	}
+	auto scalar_function = scalar_function_buf_to_scalar_function(env, scalar_function_buf);
 	if (env->ExceptionCheck()) {
-		env->DeleteLocalRef(output_values);
-		throw InvalidInputException("Java scalar function must return an Object[]");
+		return;
 	}
-	if (output_size != static_cast<jsize>(row_count)) {
-		env->DeleteLocalRef(output_values);
-		throw InvalidInputException("Java scalar function returned %lld rows, expected %lld",
-		                            static_cast<long long>(output_size), static_cast<long long>(row_count));
+	if (!function_j) {
+		throw InvalidInputException("Invalid scalar function callback");
 	}
 
-	auto output_type = output.GetType();
-	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		auto cell = env->GetObjectArrayElement(output_array, row_idx);
-		auto value = to_duckdb_value(env, cell, *state.connection->context);
-		if (cell) {
-			env->DeleteLocalRef(cell);
-		}
-
-		if (value.IsNull()) {
-			value = Value(output_type);
-		} else if (value.type() != output_type) {
-			value = value.DefaultCastAs(output_type);
-		}
-
-		output.SetValue(row_idx, value);
+	auto callback_ref = env->NewGlobalRef(function_j);
+	if (!callback_ref) {
+		throw InvalidInputException("Could not create global reference for scalar function callback");
 	}
 
-	env->DeleteLocalRef(output_values);
+	try {
+		auto apply_method = get_scalar_callback_method(env, function_j, signature, error_message);
+		auto state = new JavaScalarFunctionState(JVM_REF, callback_ref, apply_method, connection);
+		duckdb_scalar_function_set_extra_info(scalar_function, state, destroy_java_scalar_function_state);
+		duckdb_scalar_function_set_function(scalar_function, execute_java_scalar_function_capi);
+		duckdb_scalar_function_set_init(scalar_function, init_java_scalar_function_capi);
+	} catch (...) {
+		env->DeleteGlobalRef(callback_ref);
+		throw;
+	}
 }
 
 static void destroy_java_scalar_function_state(void *extra_info) {
@@ -304,7 +336,7 @@ static void execute_java_scalar_function_capi(duckdb_function_info info, duckdb_
 	try {
 		auto &input_chunk = *reinterpret_cast<DataChunk *>(input);
 		auto &output_vector = *reinterpret_cast<Vector *>(output);
-		execute_java_scalar_function(local_state->env, *state, input_chunk, output_vector);
+		execute_java_vectorized_scalar_function(local_state->env, *state, input_chunk, output_vector);
 	} catch (const std::exception &e) {
 		duckdb_scalar_function_set_error(info, e.what());
 	}
@@ -1148,37 +1180,9 @@ void _duckdb_jdbc_arrow_register(JNIEnv *env, jclass, jobject conn_ref_buf, jlon
 extern "C" JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1scalar_1function_1set_1callback(
     JNIEnv *env, jclass, jobject conn_ref_buf, jobject scalar_function_buf, jobject function_j) {
 	try {
-		auto connection = get_connection(env, conn_ref_buf);
-		if (!connection) {
-			throw InvalidInputException("Invalid connection");
-		}
-		auto scalar_function = scalar_function_buf_to_scalar_function(env, scalar_function_buf);
-		if (env->ExceptionCheck()) {
-			return;
-		}
-		if (!function_j) {
-			throw InvalidInputException("Invalid scalar function callback");
-		}
-
-		auto callback_ref = env->NewGlobalRef(function_j);
-		if (!callback_ref) {
-			throw InvalidInputException("Could not create global reference for scalar function callback");
-		}
-
-		auto callback_class = env->GetObjectClass(function_j);
-		auto apply_method =
-		    env->GetMethodID(callback_class, "apply", "([Lorg/duckdb/DuckDBVector;I)[Ljava/lang/Object;");
-		env->DeleteLocalRef(callback_class);
-		if (!apply_method || env->ExceptionCheck()) {
-			consume_java_exception_message(env);
-			env->DeleteGlobalRef(callback_ref);
-			throw InvalidInputException("Could not find apply(DuckDBVector[], int) on scalar function callback");
-		}
-
-		auto state = new JavaScalarFunctionState(JVM_REF, callback_ref, apply_method, connection);
-		duckdb_scalar_function_set_extra_info(scalar_function, state, destroy_java_scalar_function_state);
-		duckdb_scalar_function_set_function(scalar_function, execute_java_scalar_function_capi);
-		duckdb_scalar_function_set_init(scalar_function, init_java_scalar_function_capi);
+		install_java_scalar_function_callback(env, conn_ref_buf, scalar_function_buf, function_j,
+		                                     "(Lorg/duckdb/DuckDBDataChunkReader;ILorg/duckdb/DuckDBWritableVector;)V",
+		                                     "Could not find apply(DuckDBDataChunkReader, int, DuckDBWritableVector) on scalar function callback");
 	} catch (const std::exception &e) {
 		duckdb::ErrorData error(e);
 		ThrowJNI(env, error.Message().c_str());
