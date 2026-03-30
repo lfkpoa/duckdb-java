@@ -7,7 +7,12 @@ import static org.duckdb.DuckDBBindings.*;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.sql.Timestamp;
 import java.sql.SQLException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 public final class DuckDBWritableVector {
     private static final BigInteger UINT64_MAX = new BigInteger("18446744073709551615");
@@ -126,6 +131,69 @@ public final class DuckDBWritableVector {
         checkRowIndex(row);
         requireType(DuckDBColumnType.DOUBLE);
         data.order(LITTLE_ENDIAN).putDouble(row * Double.BYTES, value);
+    }
+
+    public void setDate(int row, LocalDate value) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.DATE);
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        long days = value.toEpochDay();
+        if (days < Integer.MIN_VALUE || days > Integer.MAX_VALUE) {
+            throw new SQLException("Value out of range for DATE: " + value);
+        }
+        data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, (int) days);
+    }
+
+    public void setDate(int row, java.sql.Date value) throws SQLException {
+        setDate(row, value == null ? null : value.toLocalDate());
+    }
+
+    public void setDate(int row, java.util.Date value) throws SQLException {
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        if (value instanceof java.sql.Date) {
+            setDate(row, (java.sql.Date) value);
+            return;
+        }
+        LocalDate localDate = Instant.ofEpochMilli(value.getTime()).atZone(ZoneOffset.UTC).toLocalDate();
+        setDate(row, localDate);
+    }
+
+    public void setTimestamp(int row, LocalDateTime value) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.TIMESTAMP);
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, DuckDBTimestamp.localDateTime2Micros(value));
+    }
+
+    public void setTimestamp(int row, Timestamp value) throws SQLException {
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        setTimestamp(row, value.toLocalDateTime());
+    }
+
+    public void setTimestamp(int row, java.util.Date value) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.TIMESTAMP);
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, Math.multiplyExact(value.getTime(), 1000L));
+    }
+
+    public void setTimestamp(int row, LocalDate value) throws SQLException {
+        setTimestamp(row, value == null ? null : value.atStartOfDay());
     }
 
     public void setBigDecimal(int row, BigDecimal value) throws SQLException {

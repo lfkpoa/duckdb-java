@@ -7,14 +7,14 @@ import static org.duckdb.DuckDBBindings.*;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 public final class DuckDBReadableVector {
-    private static final int STRING_T_SIZE_BYTES = 16;
-    private static final int STRING_INLINE_LENGTH_BYTES = 12;
-    private static final int STRING_LENGTH_OFFSET = 0;
-    private static final int STRING_INLINE_OFFSET = 4;
-    private static final int STRING_PTR_OFFSET = 8;
     private static final BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
 
     private final ByteBuffer vectorRef;
@@ -123,6 +123,27 @@ public final class DuckDBReadableVector {
         return data.order(LITTLE_ENDIAN).getDouble(row * Double.BYTES);
     }
 
+    public LocalDate getLocalDate(int row) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.DATE);
+        return LocalDate.ofEpochDay(data.order(LITTLE_ENDIAN).getInt(row * Integer.BYTES));
+    }
+
+    public Date getDate(int row) throws SQLException {
+        return Date.valueOf(getLocalDate(row));
+    }
+
+    public LocalDateTime getLocalDateTime(int row) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.TIMESTAMP);
+        long micros = data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES);
+        return DuckDBTimestamp.localDateTimeFromTimestamp(micros, ChronoUnit.MICROS, null);
+    }
+
+    public Timestamp getTimestamp(int row) throws SQLException {
+        return Timestamp.valueOf(getLocalDateTime(row));
+    }
+
     public BigDecimal getBigDecimal(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.DECIMAL);
@@ -150,19 +171,7 @@ public final class DuckDBReadableVector {
     public String getString(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.VARCHAR);
-        int offset = row * STRING_T_SIZE_BYTES;
-        ByteBuffer slice = data.duplicate().order(LITTLE_ENDIAN);
-        int length = slice.getInt(offset + STRING_LENGTH_OFFSET);
-        byte[] bytes = new byte[length];
-        if (length <= STRING_INLINE_LENGTH_BYTES) {
-            slice.position(offset + STRING_INLINE_OFFSET);
-            slice.get(bytes);
-            return new String(bytes, UTF_8);
-        }
-        long address = slice.getLong(offset + STRING_PTR_OFFSET);
-        ByteBuffer strData = duckdb_jdbc_create_data_buffer(address, length);
-        strData.get(bytes);
-        return new String(bytes, UTF_8);
+        return new String(duckdb_jdbc_varchar_string_bytes(data, row), UTF_8);
     }
 
     ByteBuffer vectorRef() {

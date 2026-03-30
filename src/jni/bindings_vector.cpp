@@ -2,7 +2,6 @@
 #include "refs.hpp"
 #include "util.hpp"
 
-#include <cstdint>
 #include <vector>
 
 static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
@@ -24,23 +23,30 @@ static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
 
 /*
  * Class:     org_duckdb_DuckDBBindings
- * Method:    duckdb_jdbc_create_data_buffer
- * Signature: (JJ)Ljava/nio/ByteBuffer;
+ * Method:    duckdb_jdbc_varchar_string_bytes
+ * Signature: (Ljava/nio/ByteBuffer;J)[B
  */
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1create_1data_1buffer(JNIEnv *env, jclass,
-                                                                                             jlong address,
-                                                                                             jlong size_bytes) {
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varchar_1string_1bytes(JNIEnv *env, jclass,
+                                                                                                  jobject vector_data,
+                                                                                                  jlong row) {
 
-	if (address == 0) {
-		env->ThrowNew(J_SQLException, "Invalid data address");
+	if (vector_data == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid vector data buffer");
 		return nullptr;
 	}
-	idx_t size = jlong_to_idx(env, size_bytes);
+	auto data = reinterpret_cast<duckdb_string_t *>(env->GetDirectBufferAddress(vector_data));
+	if (data == nullptr) {
+		env->ThrowNew(J_SQLException, "Invalid vector data");
+		return nullptr;
+	}
+	idx_t row_idx = jlong_to_idx(env, row);
 	if (env->ExceptionCheck()) {
 		return nullptr;
 	}
-	auto ptr = reinterpret_cast<void *>(static_cast<uintptr_t>(address));
-	return make_data_buf(env, ptr, size);
+	auto &string_value = data[row_idx];
+	auto string_len = duckdb_string_t_length(string_value);
+	auto string_ptr = duckdb_string_t_data(&string_value);
+	return make_jbyteArray(env, string_ptr, string_len);
 }
 
 /*

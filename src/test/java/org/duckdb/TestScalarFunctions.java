@@ -9,10 +9,14 @@ import static org.duckdb.test.Assertions.*;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.sql.Date;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public class TestScalarFunctions {
     private interface ResultSetVerifier {
@@ -343,6 +347,123 @@ public class TestScalarFunctions {
                                   });
     }
 
+    public static void test_register_scalar_function_date() throws Exception {
+        assertUnaryScalarFunction("java_add_date", "DATE", "DATE", (input, rowCount, out) -> {
+            DuckDBReadableVector in = input.vector(0);
+            for (int i = 0; i < rowCount; i++) {
+                if (in.isNull(i)) {
+                    out.setNull(i);
+                } else {
+                    out.setDate(i, in.getLocalDate(i).plusDays(2));
+                }
+            }
+        }, "SELECT java_add_date(v) FROM (VALUES (DATE '2024-07-20'), (NULL), (DATE '1969-12-31')) t(v)", rs -> {
+            assertTrue(rs.next());
+            assertEquals(rs.getObject(1, LocalDate.class), LocalDate.of(2024, 7, 22));
+            assertEquals(rs.getDate(1), Date.valueOf(LocalDate.of(2024, 7, 22)));
+            assertTrue(rs.next());
+            assertNullRow(rs);
+            assertTrue(rs.next());
+            assertEquals(rs.getObject(1, LocalDate.class), LocalDate.of(1970, 1, 2));
+            assertFalse(rs.next());
+        });
+    }
+
+    public static void test_register_scalar_function_date_from_java_util_date() throws Exception {
+        assertUnaryScalarFunction("java_date_from_util_date", "DATE", "DATE", (input, rowCount, out) -> {
+            DuckDBReadableVector in = input.vector(0);
+            for (int i = 0; i < rowCount; i++) {
+                if (in.isNull(i)) {
+                    out.setNull(i);
+                } else {
+                    LocalDate value = in.getLocalDate(i).plusDays(1);
+                    out.setDate(i, java.util.Date.from(value.atStartOfDay(UTC).toInstant()));
+                }
+            }
+        }, "SELECT java_date_from_util_date(v) FROM (VALUES (DATE '2024-07-21'), (NULL)) t(v)", rs -> {
+            assertTrue(rs.next());
+            assertEquals(rs.getObject(1, LocalDate.class), LocalDate.of(2024, 7, 22));
+            assertTrue(rs.next());
+            assertNullRow(rs);
+            assertFalse(rs.next());
+        });
+    }
+
+    public static void test_register_scalar_function_timestamp() throws Exception {
+        assertUnaryScalarFunction("java_add_timestamp", "TIMESTAMP", "TIMESTAMP", (input, rowCount, out) -> {
+            DuckDBReadableVector in = input.vector(0);
+            for (int i = 0; i < rowCount; i++) {
+                if (in.isNull(i)) {
+                    out.setNull(i);
+                } else {
+                    out.setTimestamp(i, in.getLocalDateTime(i).plusMinutes(30));
+                }
+            }
+        },
+                                  "SELECT java_add_timestamp(v) FROM (VALUES "
+                                      + "(TIMESTAMP '2024-07-21 12:34:56.123456'), "
+                                      + "(NULL), "
+                                      + "(TIMESTAMP '1969-12-31 23:45:00')) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      Timestamp ts1 = rs.getTimestamp(1);
+                                      assertEquals(ts1, Timestamp.valueOf("2024-07-21 13:04:56.123456"));
+                                      assertEquals(rs.getObject(1, LocalDateTime.class),
+                                                   LocalDateTime.of(2024, 7, 21, 13, 4, 56, 123456000));
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getTimestamp(1), Timestamp.valueOf("1970-01-01 00:15:00"));
+                                      assertFalse(rs.next());
+                                  });
+    }
+
+    public static void test_register_scalar_function_timestamp_from_java_util_date() throws Exception {
+        assertUnaryScalarFunction("java_timestamp_from_util_date", "TIMESTAMP", "TIMESTAMP", (input, rowCount, out) -> {
+            DuckDBReadableVector in = input.vector(0);
+            long oneSecondMillis = 1000L;
+            for (int i = 0; i < rowCount; i++) {
+                if (in.isNull(i)) {
+                    out.setNull(i);
+                } else {
+                    out.setTimestamp(i, new java.util.Date(in.getTimestamp(i).getTime() + oneSecondMillis));
+                }
+            }
+        },
+                                  "SELECT epoch_ms(java_timestamp_from_util_date(v)) FROM (VALUES "
+                                      + "(TIMESTAMP '2024-07-21 12:34:56.123456'), "
+                                      + "(NULL)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      Timestamp input = Timestamp.valueOf("2024-07-21 12:34:56.123456");
+                                      assertEquals(rs.getLong(1), input.getTime() + 1000L);
+                                      assertFalse(rs.wasNull());
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertFalse(rs.next());
+                                  });
+    }
+
+    public static void test_register_scalar_function_timestamp_from_local_date() throws Exception {
+        assertUnaryScalarFunction("java_timestamp_from_local_date", "DATE", "TIMESTAMP", (input, rowCount, out) -> {
+            DuckDBReadableVector in = input.vector(0);
+            for (int i = 0; i < rowCount; i++) {
+                if (in.isNull(i)) {
+                    out.setNull(i);
+                } else {
+                    out.setTimestamp(i, in.getLocalDate(i).plusDays(1));
+                }
+            }
+        }, "SELECT java_timestamp_from_local_date(v) FROM (VALUES (DATE '2024-07-21'), (NULL)) t(v)", rs -> {
+            assertTrue(rs.next());
+            assertEquals(rs.getTimestamp(1), Timestamp.valueOf("2024-07-22 00:00:00"));
+            assertEquals(rs.getObject(1, LocalDateTime.class), LocalDateTime.of(2024, 7, 22, 0, 0));
+            assertTrue(rs.next());
+            assertNullRow(rs);
+            assertFalse(rs.next());
+        });
+    }
+
     public static void test_register_scalar_function_varchar() throws Exception {
         assertUnaryScalarFunction("java_suffix_varchar", "VARCHAR", "VARCHAR", (input, rowCount, out) -> {
             DuckDBReadableVector in = input.vector(0);
@@ -383,4 +504,6 @@ public class TestScalarFunctions {
         assertEquals(rs.getObject(1), null);
         assertTrue(rs.wasNull());
     }
+
+    private static final java.time.ZoneOffset UTC = java.time.ZoneOffset.UTC;
 }

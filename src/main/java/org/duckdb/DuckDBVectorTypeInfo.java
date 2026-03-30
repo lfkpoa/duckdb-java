@@ -53,6 +53,10 @@ final class DuckDBVectorTypeInfo {
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.FLOAT, capiType, capiType, 4, null);
             case DUCKDB_TYPE_DOUBLE:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.DOUBLE, capiType, capiType, 8, null);
+            case DUCKDB_TYPE_DATE:
+                return new DuckDBVectorTypeInfo(DuckDBColumnType.DATE, capiType, capiType, 4, null);
+            case DUCKDB_TYPE_TIMESTAMP:
+                return new DuckDBVectorTypeInfo(DuckDBColumnType.TIMESTAMP, capiType, capiType, 8, null);
             case DUCKDB_TYPE_VARCHAR:
                 return new DuckDBVectorTypeInfo(DuckDBColumnType.VARCHAR, capiType, capiType, 16, null);
             case DUCKDB_TYPE_DECIMAL: {
