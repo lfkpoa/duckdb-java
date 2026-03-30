@@ -325,7 +325,7 @@ public final class DuckDBWritableVector {
     }
 
     private long encodeJavaUtilDate(java.util.Date value) throws SQLException {
-        return encodeInstant(value.toInstant());
+        return encodeInstant(Instant.ofEpochMilli(value.getTime()));
     }
 
     private long encodeInstant(Instant instant) throws SQLException {

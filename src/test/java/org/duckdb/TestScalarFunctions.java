@@ -14,6 +14,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -616,6 +617,38 @@ public class TestScalarFunctions {
                                       assertTrue(rs.next());
                                       assertEquals(rs.getTimestamp(1), Timestamp.valueOf("2024-07-21 12:34:56.124245"));
                                       assertFalse(rs.wasNull());
+                                      assertFalse(rs.next());
+                                  });
+    }
+
+    public static void test_register_scalar_function_timestamp_from_java_util_date_typed_sql_date() throws Exception {
+        assertUnaryScalarFunction("java_timestamp_from_util_sql_date", "DATE", "TIMESTAMP", (input, rowCount, out) -> {
+            DuckDBReadableVector in = input.vector(0);
+            for (int i = 0; i < rowCount; i++) {
+                if (in.isNull(i)) {
+                    out.setNull(i);
+                } else {
+                    java.util.Date value = Date.valueOf(in.getLocalDate(i));
+                    out.setTimestamp(i, value);
+                }
+            }
+        }, "SELECT epoch_ms(java_timestamp_from_util_sql_date(v)) FROM (VALUES (DATE '2024-07-21')) t(v)", rs -> {
+            assertTrue(rs.next());
+            assertEquals(rs.getLong(1), Date.valueOf("2024-07-21").getTime());
+            assertFalse(rs.next());
+        });
+    }
+
+    public static void test_register_scalar_function_timestamp_from_java_util_date_typed_sql_time() throws Exception {
+        assertUnaryScalarFunction("java_timestamp_from_util_sql_time", "TIMESTAMP", "TIMESTAMP", (input, rowCount, out) -> {
+            for (int i = 0; i < rowCount; i++) {
+                java.util.Date value = Time.valueOf("12:34:56");
+                out.setTimestamp(i, value);
+            }
+        }, "SELECT epoch_ms(java_timestamp_from_util_sql_time(v)) FROM (VALUES (TIMESTAMP '2024-07-21 00:00:00')) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getLong(1), Time.valueOf("12:34:56").getTime());
                                       assertFalse(rs.next());
                                   });
     }
