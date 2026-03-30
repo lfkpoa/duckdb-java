@@ -10,8 +10,11 @@ import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
 public final class DuckDBReadableVector {
@@ -135,13 +138,34 @@ public final class DuckDBReadableVector {
 
     public LocalDateTime getLocalDateTime(int row) throws SQLException {
         checkRowIndex(row);
-        requireType(DuckDBColumnType.TIMESTAMP);
-        long micros = data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES);
-        return DuckDBTimestamp.localDateTimeFromTimestamp(micros, ChronoUnit.MICROS, null);
+        requireTimestampType();
+        long epochValue = data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES);
+        switch (typeInfo.capiType) {
+        case DUCKDB_TYPE_TIMESTAMP_S:
+            return DuckDBTimestamp.localDateTimeFromTimestamp(epochValue, ChronoUnit.SECONDS, null);
+        case DUCKDB_TYPE_TIMESTAMP_MS:
+            return DuckDBTimestamp.localDateTimeFromTimestamp(epochValue, ChronoUnit.MILLIS, null);
+        case DUCKDB_TYPE_TIMESTAMP:
+            return DuckDBTimestamp.localDateTimeFromTimestamp(epochValue, ChronoUnit.MICROS, null);
+        case DUCKDB_TYPE_TIMESTAMP_NS:
+            return DuckDBTimestamp.localDateTimeFromTimestamp(epochValue, ChronoUnit.NANOS, null);
+        case DUCKDB_TYPE_TIMESTAMP_TZ:
+            return DuckDBTimestamp.localDateTimeFromTimestampWithTimezone(epochValue, ChronoUnit.MICROS, null);
+        default:
+            throw new SQLException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
+        }
     }
 
     public Timestamp getTimestamp(int row) throws SQLException {
         return Timestamp.valueOf(getLocalDateTime(row));
+    }
+
+    public OffsetDateTime getOffsetDateTime(int row) throws SQLException {
+        checkRowIndex(row);
+        requireType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE);
+        long micros = data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES);
+        Instant instant = instantFromEpoch(micros, ChronoUnit.MICROS);
+        return instant.atZone(ZoneId.systemDefault()).toOffsetDateTime();
     }
 
     public BigDecimal getBigDecimal(int row) throws SQLException {
@@ -184,6 +208,19 @@ public final class DuckDBReadableVector {
         }
     }
 
+    private void requireTimestampType() throws SQLException {
+        switch (typeInfo.columnType) {
+        case TIMESTAMP:
+        case TIMESTAMP_S:
+        case TIMESTAMP_MS:
+        case TIMESTAMP_NS:
+        case TIMESTAMP_WITH_TIME_ZONE:
+            return;
+        default:
+            throw new SQLException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
+        }
+    }
+
     private void checkRowIndex(int row) {
         if (row < 0 || row >= rowCount) {
             throw new IndexOutOfBoundsException("Row index out of bounds: " + row);
@@ -195,6 +232,27 @@ public final class DuckDBReadableVector {
             byte tmp = bytes[i];
             bytes[i] = bytes[bytes.length - 1 - i];
             bytes[bytes.length - 1 - i] = tmp;
+        }
+    }
+
+    private static Instant instantFromEpoch(long value, ChronoUnit unit) throws SQLException {
+        switch (unit) {
+        case SECONDS:
+            return Instant.ofEpochSecond(value);
+        case MILLIS:
+            return Instant.ofEpochMilli(value);
+        case MICROS: {
+            long epochSecond = Math.floorDiv(value, 1_000_000L);
+            long nanoAdjustment = Math.floorMod(value, 1_000_000L) * 1000L;
+            return Instant.ofEpochSecond(epochSecond, nanoAdjustment);
+        }
+        case NANOS: {
+            long epochSecond = Math.floorDiv(value, 1_000_000_000L);
+            long nanoAdjustment = Math.floorMod(value, 1_000_000_000L);
+            return Instant.ofEpochSecond(epochSecond, nanoAdjustment);
+        }
+        default:
+            throw new SQLException("Unsupported unit type: " + unit);
         }
     }
 }

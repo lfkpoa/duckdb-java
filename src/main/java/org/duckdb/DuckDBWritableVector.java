@@ -12,7 +12,9 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 
 public final class DuckDBWritableVector {
     private static final BigInteger UINT64_MAX = new BigInteger("18446744073709551615");
@@ -166,12 +168,12 @@ public final class DuckDBWritableVector {
 
     public void setTimestamp(int row, LocalDateTime value) throws SQLException {
         checkRowIndex(row);
-        requireType(DuckDBColumnType.TIMESTAMP);
+        requireTimestampType(false);
         if (value == null) {
             setNull(row);
             return;
         }
-        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, DuckDBTimestamp.localDateTime2Micros(value));
+        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeLocalDateTime(value));
     }
 
     public void setTimestamp(int row, Timestamp value) throws SQLException {
@@ -184,16 +186,30 @@ public final class DuckDBWritableVector {
 
     public void setTimestamp(int row, java.util.Date value) throws SQLException {
         checkRowIndex(row);
-        requireType(DuckDBColumnType.TIMESTAMP);
+        requireTimestampType(false);
         if (value == null) {
             setNull(row);
             return;
         }
-        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, Math.multiplyExact(value.getTime(), 1000L));
+        if (value instanceof Timestamp) {
+            setTimestamp(row, (Timestamp) value);
+            return;
+        }
+        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeJavaUtilDate(value));
     }
 
     public void setTimestamp(int row, LocalDate value) throws SQLException {
         setTimestamp(row, value == null ? null : value.atStartOfDay());
+    }
+
+    public void setOffsetDateTime(int row, OffsetDateTime value) throws SQLException {
+        checkRowIndex(row);
+        requireTimestampType(true);
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, DuckDBTimestamp.localDateTime2Micros(value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
     }
 
     public void setBigDecimal(int row, BigDecimal value) throws SQLException {
@@ -261,6 +277,54 @@ public final class DuckDBWritableVector {
     private void checkRowIndex(int row) {
         if (row < 0 || row >= rowCount) {
             throw new IndexOutOfBoundsException("Row index out of bounds: " + row);
+        }
+    }
+
+    private void requireTimestampType(boolean requireTimezone) throws SQLException {
+        if (requireTimezone) {
+            if (typeInfo.columnType != DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
+                throw new SQLException("Expected vector type TIMESTAMP WITH TIME ZONE, found " + typeInfo.columnType);
+            }
+            return;
+        }
+        switch (typeInfo.columnType) {
+        case TIMESTAMP:
+        case TIMESTAMP_S:
+        case TIMESTAMP_MS:
+        case TIMESTAMP_NS:
+            return;
+        default:
+            throw new SQLException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
+        }
+    }
+
+    private long encodeLocalDateTime(LocalDateTime value) throws SQLException {
+        switch (typeInfo.capiType) {
+        case DUCKDB_TYPE_TIMESTAMP_S:
+            return DuckDBTimestamp.RefLocalDateTime.until(value, ChronoUnit.SECONDS);
+        case DUCKDB_TYPE_TIMESTAMP_MS:
+            return DuckDBTimestamp.RefLocalDateTime.until(value, ChronoUnit.MILLIS);
+        case DUCKDB_TYPE_TIMESTAMP:
+            return DuckDBTimestamp.localDateTime2Micros(value);
+        case DUCKDB_TYPE_TIMESTAMP_NS:
+            return DuckDBTimestamp.RefLocalDateTime.until(value, ChronoUnit.NANOS);
+        default:
+            throw new SQLException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
+        }
+    }
+
+    private long encodeJavaUtilDate(java.util.Date value) throws SQLException {
+        switch (typeInfo.capiType) {
+        case DUCKDB_TYPE_TIMESTAMP_S:
+            return value.getTime() / 1000L;
+        case DUCKDB_TYPE_TIMESTAMP_MS:
+            return value.getTime();
+        case DUCKDB_TYPE_TIMESTAMP:
+            return Math.multiplyExact(value.getTime(), 1000L);
+        case DUCKDB_TYPE_TIMESTAMP_NS:
+            return Math.multiplyExact(value.getTime(), 1_000_000L);
+        default:
+            throw new SQLException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
         }
     }
 
