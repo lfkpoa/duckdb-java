@@ -2020,6 +2020,29 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_register_scalar_function_parallel() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("PRAGMA threads=4");
+            conn.registerScalarFunction("java_add_one_bigint", new String[] {"BIGINT"}, "BIGINT", (args, rowCount) -> {
+                Object[] out = new Object[rowCount];
+                for (int i = 0; i < rowCount; i++) {
+                    Long value = (Long) args[0].getObject(i);
+                    out[i] = value == null ? null : value + 1;
+                }
+                return out;
+            });
+
+            try (ResultSet rs =
+                     stmt.executeQuery("SELECT sum(java_add_one_bigint(i)) FROM range(1000000) t(i)")) {
+                assertTrue(rs.next());
+                assertEquals(rs.getLong(1), 500000500000L);
+                assertFalse(rs.wasNull());
+                assertFalse(rs.next());
+            }
+        }
+    }
+
     public static void test_get_profiling_information() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement()) {
             stmt.execute("SET enable_profiling = 'no_output';");

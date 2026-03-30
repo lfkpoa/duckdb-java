@@ -121,6 +121,12 @@ struct JavaScalarFunctionState {
 	}
 };
 
+struct JavaScalarFunctionLocalState {
+	JavaVM *vm;
+	JNIEnv *env;
+	bool detach_when_done;
+};
+
 static duckdb_scalar_function scalar_function_buf_to_scalar_function(JNIEnv *env, jobject scalar_function_buf) {
 	if (scalar_function_buf == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid scalar function buffer");
@@ -161,14 +167,32 @@ static string consume_java_exception_message(JNIEnv *env) {
 	return message;
 }
 
-static void execute_java_scalar_function(JavaScalarFunctionState &state, DataChunk &input, Vector &output) {
+static void get_or_attach_jni_env(JavaVM *vm, JNIEnv *&env, bool &detach_when_done) {
+	if (!vm) {
+		throw InvalidInputException("JVM is not available");
+	}
+
+	detach_when_done = false;
+	auto get_env_status = vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION);
+	if (get_env_status == JNI_OK) {
+		return;
+	}
+	if (get_env_status != JNI_EDETACHED) {
+		throw InvalidInputException("Failed to get JNI environment");
+	}
+
+	auto attach_status = vm->AttachCurrentThread(reinterpret_cast<void **>(&env), nullptr);
+	if (attach_status != JNI_OK || !env) {
+		throw InvalidInputException("Failed to attach current thread to JVM");
+	}
+	detach_when_done = true;
+}
+
+static void execute_java_scalar_function(JNIEnv *env, JavaScalarFunctionState &state, DataChunk &input, Vector &output) {
 	auto row_count = input.size();
 	if (row_count == 0) {
 		return;
 	}
-
-	JNIEnvGuard env_guard(state.vm);
-	auto *env = env_guard.env;
 
 	auto arg_count = input.ColumnCount();
 	auto arg_vectors = env->NewObjectArray(arg_count, J_DuckVector, nullptr);
@@ -233,9 +257,46 @@ static void destroy_java_scalar_function_state(void *extra_info) {
 	delete reinterpret_cast<JavaScalarFunctionState *>(extra_info);
 }
 
+static void destroy_java_scalar_function_local_state(void *state_ptr) {
+	if (!state_ptr) {
+		return;
+	}
+
+	auto state = reinterpret_cast<JavaScalarFunctionLocalState *>(state_ptr);
+	if (state->detach_when_done && state->vm) {
+		state->vm->DetachCurrentThread();
+	}
+	delete state;
+}
+
+static void init_java_scalar_function_capi(duckdb_init_info info) {
+	JavaScalarFunctionLocalState *local_state = nullptr;
+	try {
+		auto state = reinterpret_cast<JavaScalarFunctionState *>(duckdb_scalar_function_init_get_extra_info(info));
+		if (!state) {
+			duckdb_scalar_function_init_set_error(info, "Invalid Java scalar function callback state");
+			return;
+		}
+
+		local_state = new JavaScalarFunctionLocalState();
+		local_state->vm = state->vm;
+		local_state->env = nullptr;
+		local_state->detach_when_done = false;
+		get_or_attach_jni_env(local_state->vm, local_state->env, local_state->detach_when_done);
+		duckdb_scalar_function_init_set_state(info, local_state, destroy_java_scalar_function_local_state);
+		local_state = nullptr;
+	} catch (const std::exception &e) {
+		if (local_state) {
+			destroy_java_scalar_function_local_state(local_state);
+		}
+		duckdb_scalar_function_init_set_error(info, e.what());
+	}
+}
+
 static void execute_java_scalar_function_capi(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
 	auto state = reinterpret_cast<JavaScalarFunctionState *>(duckdb_scalar_function_get_extra_info(info));
-	if (!state || !input || !output) {
+	auto local_state = reinterpret_cast<JavaScalarFunctionLocalState *>(duckdb_scalar_function_get_state(info));
+	if (!state || !local_state || !local_state->env || !input || !output) {
 		duckdb_scalar_function_set_error(info, "Invalid Java scalar function callback state");
 		return;
 	}
@@ -243,7 +304,7 @@ static void execute_java_scalar_function_capi(duckdb_function_info info, duckdb_
 	try {
 		auto &input_chunk = *reinterpret_cast<DataChunk *>(input);
 		auto &output_vector = *reinterpret_cast<Vector *>(output);
-		execute_java_scalar_function(*state, input_chunk, output_vector);
+		execute_java_scalar_function(local_state->env, *state, input_chunk, output_vector);
 	} catch (const std::exception &e) {
 		duckdb_scalar_function_set_error(info, e.what());
 	}
@@ -1117,6 +1178,7 @@ extern "C" JNIEXPORT void JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1s
 		auto state = new JavaScalarFunctionState(JVM_REF, callback_ref, apply_method, connection);
 		duckdb_scalar_function_set_extra_info(scalar_function, state, destroy_java_scalar_function_state);
 		duckdb_scalar_function_set_function(scalar_function, execute_java_scalar_function_capi);
+		duckdb_scalar_function_set_init(scalar_function, init_java_scalar_function_capi);
 	} catch (const std::exception &e) {
 		duckdb::ErrorData error(e);
 		ThrowJNI(env, error.Message().c_str());
