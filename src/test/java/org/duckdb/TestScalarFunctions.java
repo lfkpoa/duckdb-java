@@ -185,6 +185,31 @@ public class TestScalarFunctions {
                                   });
     }
 
+    public static void test_register_scalar_function_integer_revalidates_after_null() throws Exception {
+        assertUnaryScalarFunction("java_revalidate_int", "INTEGER", "INTEGER",
+                                  (input, rowCount, out)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      for (int i = 0; i < rowCount; i++) {
+                                          if (in.isNull(i)) {
+                                              out.setNull(i);
+                                          } else {
+                                              out.setNull(i);
+                                              out.setInt(i, in.getInt(i) + 1);
+                                          }
+                                      }
+                                  },
+                                  "SELECT java_revalidate_int(v) FROM (VALUES (41), (NULL)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, Integer.class), 42);
+                                      assertFalse(rs.wasNull());
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertFalse(rs.next());
+                                  });
+    }
+
     public static void test_register_scalar_function_bigint() throws Exception {
         assertUnaryScalarFunction("java_add_bigint", "BIGINT", "BIGINT",
                                   (input, rowCount, out)
@@ -788,6 +813,31 @@ public class TestScalarFunctions {
                                       assertNullRow(rs);
                                       assertTrue(rs.next());
                                       assertEquals(rs.getObject(1, String.class), "abcdefghijklmnop_java");
+                                      assertFalse(rs.next());
+                                  });
+    }
+
+    public static void test_register_scalar_function_varchar_revalidates_after_null() throws Exception {
+        assertUnaryScalarFunction("java_revalidate_varchar", "VARCHAR", "VARCHAR",
+                                  (input, rowCount, out)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      for (int i = 0; i < rowCount; i++) {
+                                          if (in.isNull(i)) {
+                                              out.setNull(i);
+                                          } else {
+                                              out.setNull(i);
+                                              out.setString(i, in.getString(i) + "_ok");
+                                          }
+                                      }
+                                  },
+                                  "SELECT java_revalidate_varchar(v) FROM (VALUES ('duck'), (NULL)) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, String.class), "duck_ok");
+                                      assertFalse(rs.wasNull());
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
                                       assertFalse(rs.next());
                                   });
     }

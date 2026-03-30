@@ -54,18 +54,21 @@ public final class DuckDBWritableVector {
         checkRowIndex(row);
         requireType(DuckDBColumnType.BOOLEAN);
         data.put(row, value ? (byte) 1 : (byte) 0);
+        markValid(row);
     }
 
     public void setByte(int row, byte value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.TINYINT);
         data.put(row, value);
+        markValid(row);
     }
 
     public void setShort(int row, short value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.SMALLINT);
         data.order(LITTLE_ENDIAN).putShort(row * Short.BYTES, value);
+        markValid(row);
     }
 
     public void setUint8(int row, int value) throws SQLException {
@@ -73,6 +76,7 @@ public final class DuckDBWritableVector {
         requireType(DuckDBColumnType.UTINYINT);
         checkUnsignedRange("UTINYINT", value, 0xFFL);
         data.put(row, (byte) value);
+        markValid(row);
     }
 
     public void setUint16(int row, int value) throws SQLException {
@@ -80,12 +84,14 @@ public final class DuckDBWritableVector {
         requireType(DuckDBColumnType.USMALLINT);
         checkUnsignedRange("USMALLINT", value, 0xFFFFL);
         data.order(LITTLE_ENDIAN).putShort(row * Short.BYTES, (short) value);
+        markValid(row);
     }
 
     public void setInt(int row, int value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.INTEGER);
         data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, value);
+        markValid(row);
     }
 
     public void setUint32(int row, long value) throws SQLException {
@@ -93,12 +99,14 @@ public final class DuckDBWritableVector {
         requireType(DuckDBColumnType.UINTEGER);
         checkUnsignedRange("UINTEGER", value, 0xFFFFFFFFL);
         data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, (int) value);
+        markValid(row);
     }
 
     public void setLong(int row, long value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.BIGINT);
         data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, value);
+        markValid(row);
     }
 
     public void setUint64(int row, BigInteger value) throws SQLException {
@@ -121,18 +129,21 @@ public final class DuckDBWritableVector {
         ByteBuffer slice = data.duplicate();
         slice.position(row * Long.BYTES);
         slice.put(bytes);
+        markValid(row);
     }
 
     public void setFloat(int row, float value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.FLOAT);
         data.order(LITTLE_ENDIAN).putFloat(row * Float.BYTES, value);
+        markValid(row);
     }
 
     public void setDouble(int row, double value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.DOUBLE);
         data.order(LITTLE_ENDIAN).putDouble(row * Double.BYTES, value);
+        markValid(row);
     }
 
     public void setDate(int row, LocalDate value) throws SQLException {
@@ -147,6 +158,7 @@ public final class DuckDBWritableVector {
             throw new SQLException("Value out of range for DATE: " + value);
         }
         data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, (int) days);
+        markValid(row);
     }
 
     public void setDate(int row, java.sql.Date value) throws SQLException {
@@ -174,6 +186,7 @@ public final class DuckDBWritableVector {
             return;
         }
         data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeLocalDateTime(value));
+        markValid(row);
     }
 
     public void setTimestamp(int row, Timestamp value) throws SQLException {
@@ -184,6 +197,7 @@ public final class DuckDBWritableVector {
         if (typeInfo.columnType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
             checkRowIndex(row);
             data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeInstant(value.toInstant()));
+            markValid(row);
             return;
         }
         setTimestamp(row, value.toLocalDateTime());
@@ -201,6 +215,7 @@ public final class DuckDBWritableVector {
             return;
         }
         data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeJavaUtilDate(value));
+        markValid(row);
     }
 
     public void setTimestamp(int row, LocalDate value) throws SQLException {
@@ -212,6 +227,7 @@ public final class DuckDBWritableVector {
             checkRowIndex(row);
             Instant instant = value.atStartOfDay(ZoneId.systemDefault()).toInstant();
             data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeInstant(instant));
+            markValid(row);
             return;
         }
         setTimestamp(row, value.atStartOfDay());
@@ -227,6 +243,7 @@ public final class DuckDBWritableVector {
         data.order(LITTLE_ENDIAN)
             .putLong(row * Long.BYTES, DuckDBTimestamp.localDateTime2Micros(
                                            value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
+        markValid(row);
     }
 
     public void setBigDecimal(int row, BigDecimal value) throws SQLException {
@@ -258,6 +275,7 @@ public final class DuckDBWritableVector {
         default:
             throw new SQLException("Unsupported DECIMAL storage type: " + typeInfo.storageType);
         }
+        markValid(row);
     }
 
     public void setString(int row, String value) throws SQLException {
@@ -268,6 +286,7 @@ public final class DuckDBWritableVector {
             return;
         }
         duckdb_vector_assign_string_element_len(vectorRef, row, value.getBytes(UTF_8));
+        markValid(row);
     }
 
     ByteBuffer vectorRef() {
@@ -283,6 +302,13 @@ public final class DuckDBWritableVector {
         if (validity == null) {
             throw new SQLException("Cannot initialize vector validity");
         }
+    }
+
+    private void markValid(int row) {
+        if (validity == null) {
+            return;
+        }
+        duckdb_validity_set_row_validity(validity, row, true);
     }
 
     private void requireType(DuckDBColumnType expected) throws SQLException {
