@@ -13,8 +13,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
 
 public final class DuckDBWritableVector {
     private static final BigInteger UINT64_MAX = new BigInteger("18446744073709551615");
@@ -181,6 +181,11 @@ public final class DuckDBWritableVector {
             setNull(row);
             return;
         }
+        if (typeInfo.columnType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
+            checkRowIndex(row);
+            data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeInstant(value.toInstant()));
+            return;
+        }
         setTimestamp(row, value.toLocalDateTime());
     }
 
@@ -199,7 +204,17 @@ public final class DuckDBWritableVector {
     }
 
     public void setTimestamp(int row, LocalDate value) throws SQLException {
-        setTimestamp(row, value == null ? null : value.atStartOfDay());
+        if (value == null) {
+            setNull(row);
+            return;
+        }
+        if (typeInfo.columnType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
+            checkRowIndex(row);
+            Instant instant = value.atStartOfDay(ZoneId.systemDefault()).toInstant();
+            data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeInstant(instant));
+            return;
+        }
+        setTimestamp(row, value.atStartOfDay());
     }
 
     public void setOffsetDateTime(int row, OffsetDateTime value) throws SQLException {
@@ -292,6 +307,7 @@ public final class DuckDBWritableVector {
         case TIMESTAMP_S:
         case TIMESTAMP_MS:
         case TIMESTAMP_NS:
+        case TIMESTAMP_WITH_TIME_ZONE:
             return;
         default:
             throw new SQLException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
@@ -299,30 +315,32 @@ public final class DuckDBWritableVector {
     }
 
     private long encodeLocalDateTime(LocalDateTime value) throws SQLException {
-        switch (typeInfo.capiType) {
-        case DUCKDB_TYPE_TIMESTAMP_S:
-            return DuckDBTimestamp.RefLocalDateTime.until(value, ChronoUnit.SECONDS);
-        case DUCKDB_TYPE_TIMESTAMP_MS:
-            return DuckDBTimestamp.RefLocalDateTime.until(value, ChronoUnit.MILLIS);
-        case DUCKDB_TYPE_TIMESTAMP:
-            return DuckDBTimestamp.localDateTime2Micros(value);
-        case DUCKDB_TYPE_TIMESTAMP_NS:
-            return DuckDBTimestamp.RefLocalDateTime.until(value, ChronoUnit.NANOS);
-        default:
-            throw new SQLException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
+        Instant instant;
+        if (typeInfo.columnType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
+            instant = value.atZone(ZoneId.systemDefault()).toInstant();
+        } else {
+            instant = value.toInstant(ZoneOffset.UTC);
         }
+        return encodeInstant(instant);
     }
 
     private long encodeJavaUtilDate(java.util.Date value) throws SQLException {
+        return encodeInstant(value.toInstant());
+    }
+
+    private long encodeInstant(Instant instant) throws SQLException {
+        long epochSeconds = instant.getEpochSecond();
+        int nano = instant.getNano();
         switch (typeInfo.capiType) {
         case DUCKDB_TYPE_TIMESTAMP_S:
-            return value.getTime() / 1000L;
+            return epochSeconds;
         case DUCKDB_TYPE_TIMESTAMP_MS:
-            return value.getTime();
+            return Math.addExact(Math.multiplyExact(epochSeconds, 1_000L), nano / 1_000_000L);
         case DUCKDB_TYPE_TIMESTAMP:
-            return Math.multiplyExact(value.getTime(), 1000L);
+        case DUCKDB_TYPE_TIMESTAMP_TZ:
+            return Math.addExact(Math.multiplyExact(epochSeconds, 1_000_000L), nano / 1_000L);
         case DUCKDB_TYPE_TIMESTAMP_NS:
-            return Math.multiplyExact(value.getTime(), 1_000_000L);
+            return Math.addExact(Math.multiplyExact(epochSeconds, 1_000_000_000L), nano);
         default:
             throw new SQLException("Expected vector type TIMESTAMP*, found " + typeInfo.columnType);
         }

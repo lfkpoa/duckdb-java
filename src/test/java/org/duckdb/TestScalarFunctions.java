@@ -439,6 +439,26 @@ public class TestScalarFunctions {
         });
     }
 
+    public static void test_register_scalar_function_timestamp_s_pre_epoch() throws Exception {
+        assertUnaryScalarFunction("java_copy_timestamp_s_pre_epoch", "TIMESTAMP", "TIMESTAMP_S", (input, rowCount, out) -> {
+            DuckDBReadableVector in = input.vector(0);
+            for (int i = 0; i < rowCount; i++) {
+                if (in.isNull(i)) {
+                    out.setNull(i);
+                } else {
+                    out.setTimestamp(i, in.getLocalDateTime(i));
+                }
+            }
+        },
+                                  "SELECT java_copy_timestamp_s_pre_epoch(v) FROM (VALUES "
+                                      + "(TIMESTAMP '1969-12-31 23:59:59.999')) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getTimestamp(1), Timestamp.valueOf("1969-12-31 23:59:59"));
+                                      assertFalse(rs.next());
+                                  });
+    }
+
     public static void test_register_scalar_function_timestamp_ms() throws Exception {
         assertUnaryScalarFunction("java_add_timestamp_ms", "TIMESTAMP_MS", "TIMESTAMP_MS", (input, rowCount, out) -> {
             DuckDBReadableVector in = input.vector(0);
@@ -458,6 +478,27 @@ public class TestScalarFunctions {
                                                    LocalDateTime.of(2024, 7, 21, 12, 34, 56, 130_000_000));
                                       assertTrue(rs.next());
                                       assertNullRow(rs);
+                                      assertFalse(rs.next());
+                                  });
+    }
+
+    public static void test_register_scalar_function_timestamp_ms_pre_epoch() throws Exception {
+        assertUnaryScalarFunction("java_copy_timestamp_ms_pre_epoch", "TIMESTAMP", "TIMESTAMP_MS", (input, rowCount, out) -> {
+            DuckDBReadableVector in = input.vector(0);
+            for (int i = 0; i < rowCount; i++) {
+                if (in.isNull(i)) {
+                    out.setNull(i);
+                } else {
+                    out.setTimestamp(i, in.getLocalDateTime(i));
+                }
+            }
+        },
+                                  "SELECT java_copy_timestamp_ms_pre_epoch(v) FROM (VALUES "
+                                      + "(TIMESTAMP '1969-12-31 23:59:59.9995')) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, LocalDateTime.class),
+                                                   LocalDateTime.of(1969, 12, 31, 23, 59, 59, 999_000_000));
                                       assertFalse(rs.next());
                                   });
     }
@@ -506,6 +547,29 @@ public class TestScalarFunctions {
                                                                                 ZoneOffset.UTC)));
                                       assertTrue(rs.next());
                                       assertNullRow(rs);
+                                      assertFalse(rs.next());
+                                  });
+    }
+
+    public static void test_register_scalar_function_timestamptz_set_timestamp() throws Exception {
+        assertUnaryScalarFunction("java_copy_timestamptz_with_timestamp", "TIMESTAMP WITH TIME ZONE",
+                                  "TIMESTAMP WITH TIME ZONE", (input, rowCount, out) -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      for (int i = 0; i < rowCount; i++) {
+                                          if (in.isNull(i)) {
+                                              out.setNull(i);
+                                          } else {
+                                              out.setTimestamp(i, in.getTimestamp(i));
+                                          }
+                                      }
+                                  },
+                                  "SELECT java_copy_timestamptz_with_timestamp(v) FROM (VALUES "
+                                      + "(TIMESTAMPTZ '2024-07-21 12:34:56.123456+02:00')) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertTrue(rs.getObject(1, OffsetDateTime.class)
+                                                     .isEqual(OffsetDateTime.of(2024, 7, 21, 10, 34, 56, 123456000,
+                                                                                ZoneOffset.UTC)));
                                       assertFalse(rs.next());
                                   });
     }
