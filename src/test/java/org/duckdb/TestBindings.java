@@ -42,6 +42,38 @@ public class TestBindings {
         assertThrows(() -> { duckdb_destroy_logical_type(null); }, SQLException.class);
     }
 
+    public static void test_bindings_parse_logical_type() throws Exception {
+        ByteBuffer integerType = duckdb_jdbc_parse_logical_type(null, "INTEGER".getBytes(UTF_8));
+        assertNotNull(integerType);
+        assertEquals(DUCKDB_TYPE_INTEGER.typeId, duckdb_get_type_id(integerType));
+        duckdb_destroy_logical_type(integerType);
+
+        ByteBuffer decimalType = duckdb_jdbc_parse_logical_type(null, "DECIMAL(18,3)".getBytes(UTF_8));
+        assertNotNull(decimalType);
+        assertEquals(DUCKDB_TYPE_DECIMAL.typeId, duckdb_get_type_id(decimalType));
+        assertEquals(18, duckdb_decimal_width(decimalType));
+        assertEquals(3, duckdb_decimal_scale(decimalType));
+        assertEquals(DUCKDB_TYPE_BIGINT.typeId, duckdb_decimal_internal_type(decimalType));
+        duckdb_destroy_logical_type(decimalType);
+
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')");
+
+            ByteBuffer enumType = duckdb_jdbc_parse_logical_type(conn.connRef, "mood".getBytes(UTF_8));
+            assertNotNull(enumType);
+            assertEquals(DUCKDB_TYPE_ENUM.typeId, duckdb_get_type_id(enumType));
+            assertEquals(3L, duckdb_enum_dictionary_size(enumType));
+            assertEquals("sad".getBytes(UTF_8), duckdb_enum_dictionary_value(enumType, 0));
+            duckdb_destroy_logical_type(enumType);
+
+            assertThrows(() -> { duckdb_jdbc_parse_logical_type(conn.connRef, "missing_type".getBytes(UTF_8)); },
+                         SQLException.class);
+        }
+
+        assertThrows(() -> { duckdb_jdbc_parse_logical_type(null, null); }, SQLException.class);
+    }
+
     public static void test_bindings_vector_create() throws Exception {
         ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER.typeId);
         ByteBuffer vec = duckdb_create_vector(lt);
