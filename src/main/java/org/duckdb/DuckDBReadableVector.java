@@ -198,7 +198,7 @@ public final class DuckDBReadableVector {
     public String getString(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.VARCHAR);
-        return new String(duckdb_jdbc_varchar_string_bytes(data, row), UTF_8);
+        return new String(duckdb_jdbc_varchar_string_bytes(data, rowCount, row), UTF_8);
     }
 
     ByteBuffer vectorRef() {

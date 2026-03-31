@@ -253,16 +253,36 @@ public final class DuckDBWritableVector {
             setNull(row);
             return;
         }
-        BigDecimal scaled = value.setScale(typeInfo.decimalMeta.scale);
+        BigDecimal scaled;
+        try {
+            scaled = value.setScale(typeInfo.decimalMeta.scale);
+        } catch (ArithmeticException e) {
+            throw decimalOutOfRange(value, e);
+        }
+        if (scaled.precision() > typeInfo.decimalMeta.width) {
+            throw decimalOutOfRange(value);
+        }
         switch (typeInfo.storageType) {
         case DUCKDB_TYPE_SMALLINT:
-            data.order(LITTLE_ENDIAN).putShort(row * Short.BYTES, scaled.unscaledValue().shortValueExact());
+            try {
+                data.order(LITTLE_ENDIAN).putShort(row * Short.BYTES, scaled.unscaledValue().shortValueExact());
+            } catch (ArithmeticException e) {
+                throw decimalOutOfRange(value, e);
+            }
             break;
         case DUCKDB_TYPE_INTEGER:
-            data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, scaled.unscaledValue().intValueExact());
+            try {
+                data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, scaled.unscaledValue().intValueExact());
+            } catch (ArithmeticException e) {
+                throw decimalOutOfRange(value, e);
+            }
             break;
         case DUCKDB_TYPE_BIGINT:
-            data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, scaled.unscaledValue().longValueExact());
+            try {
+                data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, scaled.unscaledValue().longValueExact());
+            } catch (ArithmeticException e) {
+                throw decimalOutOfRange(value, e);
+            }
             break;
         case DUCKDB_TYPE_HUGEINT: {
             BigInteger unscaled = scaled.unscaledValue();
@@ -378,6 +398,18 @@ public final class DuckDBWritableVector {
         if (value < 0 || value > maxValue) {
             throw new SQLException("Value out of range for " + typeName + ": " + value);
         }
+    }
+
+    private SQLException decimalOutOfRange(BigDecimal value) {
+        return new SQLException("Value out of range for " + decimalTypeName() + ": " + value);
+    }
+
+    private SQLException decimalOutOfRange(BigDecimal value, ArithmeticException cause) {
+        return new SQLException("Value out of range for " + decimalTypeName() + ": " + value, cause);
+    }
+
+    private String decimalTypeName() {
+        return "DECIMAL(" + typeInfo.decimalMeta.width + "," + typeInfo.decimalMeta.scale + ")";
     }
 
     private static void reverseInPlace(byte[] bytes) {

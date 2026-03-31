@@ -24,10 +24,11 @@ static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
 /*
  * Class:     org_duckdb_DuckDBBindings
  * Method:    duckdb_jdbc_varchar_string_bytes
- * Signature: (Ljava/nio/ByteBuffer;J)[B
+ * Signature: (Ljava/nio/ByteBuffer;JJ)[B
  */
 JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varchar_1string_1bytes(JNIEnv *env, jclass,
                                                                                                  jobject vector_data,
+                                                                                                 jlong row_count,
                                                                                                  jlong row) {
 
 	if (vector_data == nullptr) {
@@ -39,8 +40,16 @@ JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varcha
 		env->ThrowNew(J_SQLException, "Invalid vector data");
 		return nullptr;
 	}
+	idx_t row_count_idx = jlong_to_idx(env, row_count);
+	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
 	idx_t row_idx = jlong_to_idx(env, row);
 	if (env->ExceptionCheck()) {
+		return nullptr;
+	}
+	if (row_idx >= row_count_idx) {
+		env->ThrowNew(J_SQLException, "Row index out of bounds");
 		return nullptr;
 	}
 	auto &string_value = data[row_idx];

@@ -421,6 +421,40 @@ public class TestScalarFunctions {
                                   });
     }
 
+    public static void test_register_scalar_function_decimal_precision_overflow() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarFunction("java_decimal_precision_overflow", new String[] {"DECIMAL(10,2)"},
+                                        "DECIMAL(10,2)", (input, rowCount, out) -> {
+                                            for (int i = 0; i < rowCount; i++) {
+                                                out.setBigDecimal(i, new BigDecimal("12345678901.23"));
+                                            }
+                                        });
+
+            String err = assertThrows(() -> {
+                stmt.execute("SELECT java_decimal_precision_overflow(CAST(1 AS DECIMAL(10,2)))");
+            }, SQLException.class);
+            assertTrue(err.contains("DECIMAL(10,2)"));
+        }
+    }
+
+    public static void test_register_scalar_function_decimal_scale_overflow() throws Exception {
+        try (DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
+             Statement stmt = conn.createStatement()) {
+            conn.registerScalarFunction("java_decimal_scale_overflow", new String[] {"DECIMAL(10,2)"}, "DECIMAL(10,2)",
+                                        (input, rowCount, out) -> {
+                                            for (int i = 0; i < rowCount; i++) {
+                                                out.setBigDecimal(i, new BigDecimal("1.234"));
+                                            }
+                                        });
+
+            String err = assertThrows(() -> {
+                stmt.execute("SELECT java_decimal_scale_overflow(CAST(1 AS DECIMAL(10,2)))");
+            }, SQLException.class);
+            assertTrue(err.contains("DECIMAL(10,2)"));
+        }
+    }
+
     public static void test_register_scalar_function_date() throws Exception {
         assertUnaryScalarFunction(
             "java_add_date", "DATE", "DATE",
