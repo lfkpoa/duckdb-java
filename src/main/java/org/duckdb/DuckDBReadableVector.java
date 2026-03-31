@@ -107,12 +107,8 @@ public final class DuckDBReadableVector {
     public BigInteger getUint64(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.UBIGINT);
-        byte[] bytes = new byte[Long.BYTES];
-        ByteBuffer slice = data.duplicate();
-        slice.position(row * Long.BYTES);
-        slice.get(bytes);
-        reverseInPlace(bytes);
-        return new BigInteger(1, bytes);
+        long value = data.order(NATIVE_ORDER).getLong(row * Long.BYTES);
+        return unsignedLongToBigInteger(value);
     }
 
     public float getFloat(int row) throws SQLException {
@@ -236,14 +232,6 @@ public final class DuckDBReadableVector {
         }
     }
 
-    private static void reverseInPlace(byte[] bytes) {
-        for (int i = 0; i < bytes.length / 2; i++) {
-            byte tmp = bytes[i];
-            bytes[i] = bytes[bytes.length - 1 - i];
-            bytes[bytes.length - 1 - i] = tmp;
-        }
-    }
-
     private static Instant instantFromEpoch(long value, ChronoUnit unit) throws SQLException {
         switch (unit) {
         case SECONDS:
@@ -263,5 +251,12 @@ public final class DuckDBReadableVector {
         default:
             throw new SQLException("Unsupported unit type: " + unit);
         }
+    }
+
+    private static BigInteger unsignedLongToBigInteger(long value) {
+        if (value >= 0) {
+            return BigInteger.valueOf(value);
+        }
+        return BigInteger.valueOf(value & Long.MAX_VALUE).setBit(Long.SIZE - 1);
     }
 }

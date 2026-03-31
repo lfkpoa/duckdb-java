@@ -6,6 +6,7 @@ import static org.duckdb.DuckDBBindings.CAPIType.*;
 import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -174,6 +175,36 @@ public class TestBindings {
 
         DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
         assertEquals(readable.getInt(0), expected);
+
+        duckdb_destroy_vector(vec);
+        duckdb_destroy_logical_type(lt);
+    }
+
+    public static void test_bindings_vector_ubigint_native_endian_roundtrip() throws Exception {
+        ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT.typeId);
+        ByteBuffer vec = duckdb_create_vector(lt);
+
+        int rowCount = (int) duckdb_vector_size();
+        assertTrue(rowCount >= 4);
+        BigInteger[] values =
+            new BigInteger[] {BigInteger.ZERO, new BigInteger("42"), new BigInteger("9223372036854775808"),
+                              new BigInteger("18446744073709551615")};
+
+        DuckDBWritableVector writable = new DuckDBWritableVector(vec, rowCount);
+        for (int i = 0; i < values.length; i++) {
+            writable.setUint64(i, values[i]);
+        }
+
+        ByteBuffer rawData = duckdb_vector_get_data(vec, (long) rowCount * Long.BYTES);
+        ByteBuffer nativeData = rawData.order(ByteOrder.nativeOrder());
+        for (int i = 0; i < values.length; i++) {
+            assertEquals(nativeData.getLong(i * Long.BYTES), values[i].longValue());
+        }
+
+        DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
+        for (int i = 0; i < values.length; i++) {
+            assertEquals(readable.getUint64(i), values[i]);
+        }
 
         duckdb_destroy_vector(vec);
         duckdb_destroy_logical_type(lt);

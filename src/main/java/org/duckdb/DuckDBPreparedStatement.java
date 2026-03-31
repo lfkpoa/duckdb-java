@@ -42,7 +42,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import org.duckdb.user.DuckDBUserArray;
 
 public class DuckDBPreparedStatement implements PreparedStatement {
     private DuckDBConnection conn;
@@ -1048,7 +1047,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             }
             break;
         case Types.ARRAY:
-            if (x instanceof DuckDBUserArray) {
+            if (x instanceof Array) {
                 setArray(parameterIndex, (Array) x);
             } else {
                 throw new SQLException("Can't convert value to array " + x.getClass().toString());

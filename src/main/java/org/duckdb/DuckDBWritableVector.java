@@ -120,16 +120,7 @@ public final class DuckDBWritableVector {
         if (value.signum() < 0 || value.compareTo(UINT64_MAX) > 0) {
             throw new SQLException("Value out of range for UBIGINT: " + value);
         }
-        byte[] bytes = new byte[Long.BYTES];
-        byte[] source = value.toByteArray();
-        int copyLength = Math.min(source.length, Long.BYTES);
-        for (int i = 0; i < copyLength; i++) {
-            bytes[Long.BYTES - copyLength + i] = source[source.length - copyLength + i];
-        }
-        reverseInPlace(bytes);
-        ByteBuffer slice = data.duplicate();
-        slice.position(row * Long.BYTES);
-        slice.put(bytes);
+        data.order(NATIVE_ORDER).putLong(row * Long.BYTES, value.longValue());
         markValid(row);
     }
 
@@ -411,13 +402,5 @@ public final class DuckDBWritableVector {
 
     private String decimalTypeName() {
         return "DECIMAL(" + typeInfo.decimalMeta.width + "," + typeInfo.decimalMeta.scale + ")";
-    }
-
-    private static void reverseInPlace(byte[] bytes) {
-        for (int i = 0; i < bytes.length / 2; i++) {
-            byte tmp = bytes[i];
-            bytes[i] = bytes[bytes.length - 1 - i];
-            bytes[bytes.length - 1 - i] = tmp;
-        }
     }
 }
