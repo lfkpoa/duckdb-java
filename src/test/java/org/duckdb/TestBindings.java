@@ -7,6 +7,7 @@ import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 import static org.duckdb.test.Assertions.*;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.util.Arrays;
@@ -136,6 +137,43 @@ public class TestBindings {
         data.position(dataPos);
         data.get(buf);
         assertEquals(new String(buf, UTF_8), str);
+
+        duckdb_destroy_vector(vec);
+        duckdb_destroy_logical_type(lt);
+    }
+
+    public static void test_bindings_varchar_string_bytes_null_row() throws Exception {
+        ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR.typeId);
+        ByteBuffer vec = duckdb_create_vector(lt);
+
+        long rowCount = duckdb_vector_size();
+        ByteBuffer data = duckdb_vector_get_data(vec, rowCount * STRING_T_SIZE_BYTES);
+        duckdb_vector_ensure_validity_writable(vec);
+        ByteBuffer validity = duckdb_vector_get_validity(vec, rowCount);
+
+        duckdb_validity_set_row_validity(validity, 0L, false);
+        assertNull(duckdb_jdbc_varchar_string_bytes(data, validity, rowCount, 0L));
+        assertThrows(
+            () -> { duckdb_jdbc_varchar_string_bytes(data, validity, rowCount, rowCount); }, SQLException.class);
+
+        duckdb_destroy_vector(vec);
+        duckdb_destroy_logical_type(lt);
+    }
+
+    public static void test_bindings_vector_native_endian_roundtrip() throws Exception {
+        ByteBuffer lt = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER.typeId);
+        ByteBuffer vec = duckdb_create_vector(lt);
+
+        int rowCount = (int) duckdb_vector_size();
+        int expected = 0x01020304;
+        DuckDBWritableVector writable = new DuckDBWritableVector(vec, rowCount);
+        writable.setInt(0, expected);
+
+        ByteBuffer rawData = duckdb_vector_get_data(vec, (long) rowCount * Integer.BYTES);
+        assertEquals(rawData.order(ByteOrder.nativeOrder()).getInt(0), expected);
+
+        DuckDBReadableVector readable = new DuckDBReadableVector(vec, rowCount);
+        assertEquals(readable.getInt(0), expected);
 
         duckdb_destroy_vector(vec);
         duckdb_destroy_logical_type(lt);

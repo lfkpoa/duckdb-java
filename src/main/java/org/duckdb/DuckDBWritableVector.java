@@ -1,12 +1,12 @@
 package org.duckdb;
 
-import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.duckdb.DuckDBBindings.*;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -18,6 +18,7 @@ import java.time.ZoneOffset;
 
 public final class DuckDBWritableVector {
     private static final BigInteger UINT64_MAX = new BigInteger("18446744073709551615");
+    private static final ByteOrder NATIVE_ORDER = ByteOrder.nativeOrder();
 
     private final ByteBuffer vectorRef;
     private final int rowCount;
@@ -67,7 +68,7 @@ public final class DuckDBWritableVector {
     public void setShort(int row, short value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.SMALLINT);
-        data.order(LITTLE_ENDIAN).putShort(row * Short.BYTES, value);
+        data.order(NATIVE_ORDER).putShort(row * Short.BYTES, value);
         markValid(row);
     }
 
@@ -83,14 +84,14 @@ public final class DuckDBWritableVector {
         checkRowIndex(row);
         requireType(DuckDBColumnType.USMALLINT);
         checkUnsignedRange("USMALLINT", value, 0xFFFFL);
-        data.order(LITTLE_ENDIAN).putShort(row * Short.BYTES, (short) value);
+        data.order(NATIVE_ORDER).putShort(row * Short.BYTES, (short) value);
         markValid(row);
     }
 
     public void setInt(int row, int value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.INTEGER);
-        data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, value);
+        data.order(NATIVE_ORDER).putInt(row * Integer.BYTES, value);
         markValid(row);
     }
 
@@ -98,14 +99,14 @@ public final class DuckDBWritableVector {
         checkRowIndex(row);
         requireType(DuckDBColumnType.UINTEGER);
         checkUnsignedRange("UINTEGER", value, 0xFFFFFFFFL);
-        data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, (int) value);
+        data.order(NATIVE_ORDER).putInt(row * Integer.BYTES, (int) value);
         markValid(row);
     }
 
     public void setLong(int row, long value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.BIGINT);
-        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, value);
+        data.order(NATIVE_ORDER).putLong(row * Long.BYTES, value);
         markValid(row);
     }
 
@@ -135,14 +136,14 @@ public final class DuckDBWritableVector {
     public void setFloat(int row, float value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.FLOAT);
-        data.order(LITTLE_ENDIAN).putFloat(row * Float.BYTES, value);
+        data.order(NATIVE_ORDER).putFloat(row * Float.BYTES, value);
         markValid(row);
     }
 
     public void setDouble(int row, double value) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.DOUBLE);
-        data.order(LITTLE_ENDIAN).putDouble(row * Double.BYTES, value);
+        data.order(NATIVE_ORDER).putDouble(row * Double.BYTES, value);
         markValid(row);
     }
 
@@ -157,7 +158,7 @@ public final class DuckDBWritableVector {
         if (days < Integer.MIN_VALUE || days > Integer.MAX_VALUE) {
             throw new SQLException("Value out of range for DATE: " + value);
         }
-        data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, (int) days);
+        data.order(NATIVE_ORDER).putInt(row * Integer.BYTES, (int) days);
         markValid(row);
     }
 
@@ -185,7 +186,7 @@ public final class DuckDBWritableVector {
             setNull(row);
             return;
         }
-        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeLocalDateTime(value));
+        data.order(NATIVE_ORDER).putLong(row * Long.BYTES, encodeLocalDateTime(value));
         markValid(row);
     }
 
@@ -196,7 +197,7 @@ public final class DuckDBWritableVector {
         }
         if (typeInfo.columnType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
             checkRowIndex(row);
-            data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeInstant(value.toInstant()));
+            data.order(NATIVE_ORDER).putLong(row * Long.BYTES, encodeInstant(value.toInstant()));
             markValid(row);
             return;
         }
@@ -214,7 +215,7 @@ public final class DuckDBWritableVector {
             setTimestamp(row, (Timestamp) value);
             return;
         }
-        data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeJavaUtilDate(value));
+        data.order(NATIVE_ORDER).putLong(row * Long.BYTES, encodeJavaUtilDate(value));
         markValid(row);
     }
 
@@ -226,7 +227,7 @@ public final class DuckDBWritableVector {
         if (typeInfo.columnType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
             checkRowIndex(row);
             Instant instant = value.atStartOfDay(ZoneId.systemDefault()).toInstant();
-            data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, encodeInstant(instant));
+            data.order(NATIVE_ORDER).putLong(row * Long.BYTES, encodeInstant(instant));
             markValid(row);
             return;
         }
@@ -240,7 +241,7 @@ public final class DuckDBWritableVector {
             setNull(row);
             return;
         }
-        data.order(LITTLE_ENDIAN)
+        data.order(NATIVE_ORDER)
             .putLong(row * Long.BYTES, DuckDBTimestamp.localDateTime2Micros(
                                            value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime()));
         markValid(row);
@@ -265,28 +266,28 @@ public final class DuckDBWritableVector {
         switch (typeInfo.storageType) {
         case DUCKDB_TYPE_SMALLINT:
             try {
-                data.order(LITTLE_ENDIAN).putShort(row * Short.BYTES, scaled.unscaledValue().shortValueExact());
+                data.order(NATIVE_ORDER).putShort(row * Short.BYTES, scaled.unscaledValue().shortValueExact());
             } catch (ArithmeticException e) {
                 throw decimalOutOfRange(value, e);
             }
             break;
         case DUCKDB_TYPE_INTEGER:
             try {
-                data.order(LITTLE_ENDIAN).putInt(row * Integer.BYTES, scaled.unscaledValue().intValueExact());
+                data.order(NATIVE_ORDER).putInt(row * Integer.BYTES, scaled.unscaledValue().intValueExact());
             } catch (ArithmeticException e) {
                 throw decimalOutOfRange(value, e);
             }
             break;
         case DUCKDB_TYPE_BIGINT:
             try {
-                data.order(LITTLE_ENDIAN).putLong(row * Long.BYTES, scaled.unscaledValue().longValueExact());
+                data.order(NATIVE_ORDER).putLong(row * Long.BYTES, scaled.unscaledValue().longValueExact());
             } catch (ArithmeticException e) {
                 throw decimalOutOfRange(value, e);
             }
             break;
         case DUCKDB_TYPE_HUGEINT: {
             BigInteger unscaled = scaled.unscaledValue();
-            ByteBuffer slice = data.duplicate().order(LITTLE_ENDIAN);
+            ByteBuffer slice = data.duplicate().order(NATIVE_ORDER);
             slice.position(row * typeInfo.widthBytes);
             slice.putLong(unscaled.longValue());
             slice.putLong(unscaled.shiftRight(Long.SIZE).longValue());

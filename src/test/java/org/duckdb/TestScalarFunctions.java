@@ -841,6 +841,28 @@ public class TestScalarFunctions {
                                   });
     }
 
+    public static void test_register_scalar_function_varchar_get_string_handles_null() throws Exception {
+        assertUnaryScalarFunction("java_echo_varchar_nullable", "VARCHAR", "VARCHAR",
+                                  (input, rowCount, out)
+                                      -> {
+                                      DuckDBReadableVector in = input.vector(0);
+                                      for (int i = 0; i < rowCount; i++) {
+                                          out.setString(i, in.getString(i));
+                                      }
+                                  },
+                                  "SELECT java_echo_varchar_nullable(v) FROM (VALUES ('duck'), (NULL), "
+                                      + "('abcdefghijklmnop')) t(v)",
+                                  rs -> {
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, String.class), "duck");
+                                      assertTrue(rs.next());
+                                      assertNullRow(rs);
+                                      assertTrue(rs.next());
+                                      assertEquals(rs.getObject(1, String.class), "abcdefghijklmnop");
+                                      assertFalse(rs.next());
+                                  });
+    }
+
     public static void test_register_scalar_function_varchar_revalidates_after_null() throws Exception {
         assertUnaryScalarFunction("java_revalidate_varchar", "VARCHAR", "VARCHAR",
                                   (input, rowCount, out)

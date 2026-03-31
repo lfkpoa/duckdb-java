@@ -1,12 +1,12 @@
 package org.duckdb;
 
-import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.duckdb.DuckDBBindings.*;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.sql.Date;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -19,6 +19,7 @@ import java.time.temporal.ChronoUnit;
 
 public final class DuckDBReadableVector {
     private static final BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
+    private static final ByteOrder NATIVE_ORDER = ByteOrder.nativeOrder();
 
     private final ByteBuffer vectorRef;
     private final int rowCount;
@@ -51,7 +52,7 @@ public final class DuckDBReadableVector {
             return false;
         }
         int entryPos = (row / 64) * Long.BYTES;
-        long mask = validity.order(LITTLE_ENDIAN).getLong(entryPos);
+        long mask = validity.order(NATIVE_ORDER).getLong(entryPos);
         return (mask & (1L << (row % 64))) == 0;
     }
 
@@ -70,7 +71,7 @@ public final class DuckDBReadableVector {
     public short getShort(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.SMALLINT);
-        return data.order(LITTLE_ENDIAN).getShort(row * Short.BYTES);
+        return data.order(NATIVE_ORDER).getShort(row * Short.BYTES);
     }
 
     public short getUint8(int row) throws SQLException {
@@ -82,25 +83,25 @@ public final class DuckDBReadableVector {
     public int getUint16(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.USMALLINT);
-        return Short.toUnsignedInt(data.order(LITTLE_ENDIAN).getShort(row * Short.BYTES));
+        return Short.toUnsignedInt(data.order(NATIVE_ORDER).getShort(row * Short.BYTES));
     }
 
     public int getInt(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.INTEGER);
-        return data.order(LITTLE_ENDIAN).getInt(row * Integer.BYTES);
+        return data.order(NATIVE_ORDER).getInt(row * Integer.BYTES);
     }
 
     public long getUint32(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.UINTEGER);
-        return Integer.toUnsignedLong(data.order(LITTLE_ENDIAN).getInt(row * Integer.BYTES));
+        return Integer.toUnsignedLong(data.order(NATIVE_ORDER).getInt(row * Integer.BYTES));
     }
 
     public long getLong(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.BIGINT);
-        return data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES);
+        return data.order(NATIVE_ORDER).getLong(row * Long.BYTES);
     }
 
     public BigInteger getUint64(int row) throws SQLException {
@@ -117,19 +118,19 @@ public final class DuckDBReadableVector {
     public float getFloat(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.FLOAT);
-        return data.order(LITTLE_ENDIAN).getFloat(row * Float.BYTES);
+        return data.order(NATIVE_ORDER).getFloat(row * Float.BYTES);
     }
 
     public double getDouble(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.DOUBLE);
-        return data.order(LITTLE_ENDIAN).getDouble(row * Double.BYTES);
+        return data.order(NATIVE_ORDER).getDouble(row * Double.BYTES);
     }
 
     public LocalDate getLocalDate(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.DATE);
-        return LocalDate.ofEpochDay(data.order(LITTLE_ENDIAN).getInt(row * Integer.BYTES));
+        return LocalDate.ofEpochDay(data.order(NATIVE_ORDER).getInt(row * Integer.BYTES));
     }
 
     public Date getDate(int row) throws SQLException {
@@ -139,7 +140,7 @@ public final class DuckDBReadableVector {
     public LocalDateTime getLocalDateTime(int row) throws SQLException {
         checkRowIndex(row);
         requireTimestampType();
-        long epochValue = data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES);
+        long epochValue = data.order(NATIVE_ORDER).getLong(row * Long.BYTES);
         switch (typeInfo.capiType) {
         case DUCKDB_TYPE_TIMESTAMP_S:
             return DuckDBTimestamp.localDateTimeFromTimestamp(epochValue, ChronoUnit.SECONDS, null);
@@ -163,7 +164,7 @@ public final class DuckDBReadableVector {
     public OffsetDateTime getOffsetDateTime(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE);
-        long micros = data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES);
+        long micros = data.order(NATIVE_ORDER).getLong(row * Long.BYTES);
         Instant instant = instantFromEpoch(micros, ChronoUnit.MICROS);
         return instant.atZone(ZoneId.systemDefault()).toOffsetDateTime();
     }
@@ -173,15 +174,13 @@ public final class DuckDBReadableVector {
         requireType(DuckDBColumnType.DECIMAL);
         switch (typeInfo.storageType) {
         case DUCKDB_TYPE_SMALLINT:
-            return BigDecimal.valueOf(data.order(LITTLE_ENDIAN).getShort(row * Short.BYTES),
-                                      typeInfo.decimalMeta.scale);
+            return BigDecimal.valueOf(data.order(NATIVE_ORDER).getShort(row * Short.BYTES), typeInfo.decimalMeta.scale);
         case DUCKDB_TYPE_INTEGER:
-            return BigDecimal.valueOf(data.order(LITTLE_ENDIAN).getInt(row * Integer.BYTES),
-                                      typeInfo.decimalMeta.scale);
+            return BigDecimal.valueOf(data.order(NATIVE_ORDER).getInt(row * Integer.BYTES), typeInfo.decimalMeta.scale);
         case DUCKDB_TYPE_BIGINT:
-            return BigDecimal.valueOf(data.order(LITTLE_ENDIAN).getLong(row * Long.BYTES), typeInfo.decimalMeta.scale);
+            return BigDecimal.valueOf(data.order(NATIVE_ORDER).getLong(row * Long.BYTES), typeInfo.decimalMeta.scale);
         case DUCKDB_TYPE_HUGEINT: {
-            ByteBuffer slice = data.duplicate().order(LITTLE_ENDIAN);
+            ByteBuffer slice = data.duplicate().order(NATIVE_ORDER);
             slice.position(row * typeInfo.widthBytes);
             long lower = slice.getLong();
             long upper = slice.getLong();
@@ -198,7 +197,14 @@ public final class DuckDBReadableVector {
     public String getString(int row) throws SQLException {
         checkRowIndex(row);
         requireType(DuckDBColumnType.VARCHAR);
-        return new String(duckdb_jdbc_varchar_string_bytes(data, rowCount, row), UTF_8);
+        if (isNull(row)) {
+            return null;
+        }
+        byte[] bytes = duckdb_jdbc_varchar_string_bytes(data, validity, rowCount, row);
+        if (bytes == null) {
+            return null;
+        }
+        return new String(bytes, UTF_8);
     }
 
     ByteBuffer vectorRef() {

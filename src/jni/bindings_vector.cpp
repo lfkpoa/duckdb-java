@@ -24,12 +24,10 @@ static duckdb_vector vector_buf_to_vector(JNIEnv *env, jobject vector_buf) {
 /*
  * Class:     org_duckdb_DuckDBBindings
  * Method:    duckdb_jdbc_varchar_string_bytes
- * Signature: (Ljava/nio/ByteBuffer;JJ)[B
+ * Signature: (Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;JJ)[B
  */
-JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varchar_1string_1bytes(JNIEnv *env, jclass,
-                                                                                                 jobject vector_data,
-                                                                                                 jlong row_count,
-                                                                                                 jlong row) {
+JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varchar_1string_1bytes(
+    JNIEnv *env, jclass, jobject vector_data, jobject validity, jlong row_count, jlong row) {
 
 	if (vector_data == nullptr) {
 		env->ThrowNew(J_SQLException, "Invalid vector data buffer");
@@ -51,6 +49,16 @@ JNIEXPORT jbyteArray JNICALL Java_org_duckdb_DuckDBBindings_duckdb_1jdbc_1varcha
 	if (row_idx >= row_count_idx) {
 		env->ThrowNew(J_SQLException, "Row index out of bounds");
 		return nullptr;
+	}
+	if (validity != nullptr) {
+		auto mask = reinterpret_cast<uint64_t *>(env->GetDirectBufferAddress(validity));
+		if (mask == nullptr) {
+			env->ThrowNew(J_SQLException, "Invalid validity buffer");
+			return nullptr;
+		}
+		if ((mask[row_idx / 64] & (1ULL << (row_idx % 64))) == 0) {
+			return nullptr;
+		}
 	}
 	auto &string_value = data[row_idx];
 	auto string_len = duckdb_string_t_length(string_value);

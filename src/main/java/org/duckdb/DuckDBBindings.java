@@ -34,7 +34,8 @@ public class DuckDBBindings {
     static native void duckdb_jdbc_scalar_function_set_callback(ByteBuffer connection, ByteBuffer scalarFunction,
                                                                 DuckDBVectorizedScalarFunction function);
 
-    static native byte[] duckdb_jdbc_varchar_string_bytes(ByteBuffer vectorData, long rowCount, long row);
+    static native byte[] duckdb_jdbc_varchar_string_bytes(ByteBuffer vectorData, ByteBuffer validity, long rowCount,
+                                                          long row);
 
     // logical type
 
