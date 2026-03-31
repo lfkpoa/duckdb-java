@@ -102,10 +102,9 @@ struct JavaScalarFunctionState {
 	JavaVM *vm;
 	jobject callback;
 	jmethodID apply_method;
-	Connection *connection;
 
-	JavaScalarFunctionState(JavaVM *vm_p, jobject callback_p, jmethodID apply_method_p, Connection *connection_p)
-	    : vm(vm_p), callback(callback_p), apply_method(apply_method_p), connection(connection_p) {
+	JavaScalarFunctionState(JavaVM *vm_p, jobject callback_p, jmethodID apply_method_p)
+	    : vm(vm_p), callback(callback_p), apply_method(apply_method_p) {
 	}
 
 	~JavaScalarFunctionState() {
@@ -272,7 +271,7 @@ static void install_java_scalar_function_callback(JNIEnv *env, jobject conn_ref_
 
 	try {
 		auto apply_method = get_scalar_callback_method(env, function_j, signature, error_message);
-		auto state = new JavaScalarFunctionState(JVM_REF, callback_ref, apply_method, connection);
+		auto state = new JavaScalarFunctionState(JVM_REF, callback_ref, apply_method);
 		duckdb_scalar_function_set_extra_info(scalar_function, state, destroy_java_scalar_function_state);
 		duckdb_scalar_function_set_function(scalar_function, execute_java_scalar_function_capi);
 		duckdb_scalar_function_set_init(scalar_function, init_java_scalar_function_capi);
